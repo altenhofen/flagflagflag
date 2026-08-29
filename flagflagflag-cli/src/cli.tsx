@@ -2,16 +2,21 @@ import { render } from 'ink';
 import { App } from './app.js';
 import { Dashboard } from './dashboard.js';
 import { FlagApiClient } from './api-client.js';
+import { SettingsWizard } from './settings-wizard.js';
+import { FileSettingsStore } from './settings.js';
+import type { CliSettings, SettingsStore } from './settings.js';
 import type { FlagApi } from './api-client.js';
 
 export interface CliDependencies {
   api?: FlagApi;
+  settings?: SettingsStore;
   write: (message: string) => void;
 }
 
 const help = `flagflagflag commands:
   flag3 tui [connection options]
   flagflagflag wizard [connection options]
+  flagflagflag config
   flagflagflag is-enabled <name> --project-id <id> --environment <name>
   flagflagflag project create <name>
   flagflagflag environment create <project-id> <name>
@@ -24,7 +29,6 @@ connection options:
   --password <password>   Better Auth password
   --api-key <key>         SDK API key
 `;
-
 export async function runCli(
   argv: string[],
   dependencies: CliDependencies = {
@@ -36,10 +40,21 @@ export async function runCli(
     return 0;
   }
 
-  const api = dependencies.api ?? createApiClient(argv);
+  const settingsStore = dependencies.settings ?? new FileSettingsStore();
+  if (argv[0] === 'config') {
+    return runSettingsWizard(settingsStore);
+  }
+  if (argv[0] === 'wizard' && !dependencies.api) {
+    return runWizardWithSettings(argv, settingsStore);
+  }
+
   try {
+    const api = dependencies.api ?? (await createApiClient(argv, settingsStore));
     if (argv[0] === 'tui') {
       return await runDashboard(api);
+    }
+    if (argv[0] === 'wizard') {
+      return await runWizard(api);
     }
     if (argv[0] === 'is-enabled') {
       return await evaluateFlag(argv.slice(1), api, dependencies.write);
@@ -59,6 +74,7 @@ export async function runCli(
     }
   } catch (cause) {
     dependencies.write(`${cause instanceof Error ? cause.message : 'Request failed'}\\n`);
+    return 1;
   }
 
   dependencies.write(`Unknown command: ${argv[0]}\\n`);
@@ -113,32 +129,75 @@ function getOption(argv: string[], name: string): string | undefined {
   return index === -1 ? undefined : argv[index + 1];
 }
 
-function createApiClient(argv: string[]): FlagApiClient {
+async function createApiClient(
+  argv: string[],
+  settingsStore: SettingsStore,
+): Promise<FlagApiClient> {
+  const saved = await settingsStore.load();
   const host =
     getOption(argv, '--host') ??
     process.env.FLAGFLAGFLAG_HOST ??
-    'localhost';
-  const port =
+    saved.host;
+  const portValue =
     getOption(argv, '--port') ??
     process.env.FLAGFLAGFLAG_PORT ??
-    '3000';
+    String(saved.port);
+  const port = Number(portValue);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('Port must be an integer from 1 to 65535');
+  }
+
   return new FlagApiClient({
-    baseUrl:
-      process.env.FLAGFLAGFLAG_URL ??
-      `http://${host}:${port}`,
+    baseUrl: process.env.FLAGFLAGFLAG_URL ?? `http://${host}:${port}`,
     username:
       getOption(argv, '--username') ??
       process.env.FLAGFLAGFLAG_USERNAME ??
-      '',
+      saved.username,
     password:
       getOption(argv, '--password') ??
       process.env.FLAGFLAGFLAG_PASSWORD ??
-      '',
+      saved.password,
     apiKey:
       getOption(argv, '--api-key') ??
-      process.env.FLAGFLAGFLAG_API_KEY,
+      process.env.FLAGFLAGFLAG_API_KEY ??
+      saved.apiKey,
   });
 }
+async function runWizardWithSettings(
+  argv: string[],
+  settingsStore: SettingsStore,
+): Promise<number> {
+  return runSettingsWizard(settingsStore, async (settings) => {
+    const api = await createApiClient(argv, settingsStore);
+    return runWizard(api);
+  });
+}
+
+async function runSettingsWizard(
+  settingsStore: SettingsStore,
+  afterSave?: (settings: CliSettings) => Promise<number>,
+): Promise<number> {
+  const { promise, resolve, reject } = Promise.withResolvers<number>();
+  const initialSettings = await settingsStore.load();
+  let unmount: () => void = () => undefined;
+  const instance = render(
+    <SettingsWizard
+      initialSettings={initialSettings}
+      onComplete={async (settings) => {
+        try {
+          await settingsStore.save(settings);
+          unmount();
+          resolve((await afterSave?.(settings)) ?? 0);
+        } catch (cause) {
+          reject(cause);
+        }
+      }}
+    />,
+  );
+  unmount = instance.unmount;
+  return promise;
+}
+
 
 async function runWizard(api: FlagApi): Promise<number> {
   const { promise, resolve } = Promise.withResolvers<number>();

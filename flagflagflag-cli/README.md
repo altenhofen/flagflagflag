@@ -56,23 +56,30 @@ flag3 tui \
   --password flag3
 ```
 
-Environment variables are available for scripts and local shell setup:
+Settings are persisted in
+`$XDG_CONFIG_HOME/flagflagflag/settings.json`, or
+`~/.config/flagflagflag/settings.json` when `XDG_CONFIG_HOME` is unset. Override
+the path with `FLAGFLAGFLAG_CONFIG`.
 
-```text
-FLAGFLAGFLAG_URL
-FLAGFLAGFLAG_HOST
-FLAGFLAGFLAG_PORT
-FLAGFLAGFLAG_USERNAME
-FLAGFLAGFLAG_PASSWORD
-FLAGFLAGFLAG_API_KEY
+Run the connection wizard directly:
+
+```bash
+flag3 config
 ```
 
-`FLAGFLAGFLAG_URL` takes precedence over the host and port pair. The host and
-port defaults are `localhost` and `3000`; credentials have no hard-coded default.
+The wizard stores hostname, port, Better Auth username/password, and SDK API
+key locally. The file is created with `0700` parent-directory and `0600` file
+permissions. Credentials are stored locally in plaintext; protect the account
+and configuration directory accordingly.
+
+Command-line options override environment variables, which override saved
+settings. `FLAGFLAGFLAG_URL` overrides the host and port pair. Host and port
+default to `localhost` and `3000`; credentials have no hard-coded default.
 
 ## Commands
 
 ```text
+flag3 config
 flag3 tui [connection options]
 flagflagflag wizard [connection options]
 flagflagflag is-enabled <name> --project-id <id> --environment <name>
