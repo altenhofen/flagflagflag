@@ -16,13 +16,14 @@ describe('FlagsClient', () => {
     const client = new FlagsClient({ sdkKey: 'key', baseUrl: 'http://flags', fetch: fetcher });
     await client.initialize();
     expect(client.isEnabled('x', {})).toBe(true);
-    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledTimes(2);
     expect(client.evaluate('missing', {}, true)).toEqual({ value: true, reason: 'FLAG_NOT_FOUND' });
     client.close();
   });
   it('preserves the snapshot after 304, invalid JSON, and failed refreshes', async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(response(200, config))
+      .mockResolvedValueOnce(response(200, undefined))
       .mockResolvedValueOnce(response(304, undefined))
       .mockResolvedValueOnce(response(200, { version: 'bad' }))
       .mockRejectedValueOnce(new Error('offline'));
@@ -45,6 +46,29 @@ describe('FlagsClient', () => {
     resolve(response(200, config));
     await expect(first).resolves.toBe(true);
     await expect(second).resolves.toBe(true);
+    client.close();
+  });
+
+  it('refreshes from a newer config.updated event without remote evaluation', async () => {
+    const updated = { ...config, configVersion: 2, flags: { x: { ...config.flags.x, enabled: false } } };
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('event: config.updated\ndata: {"version":2}\n\n'));
+        controller.close();
+      },
+    });
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(response(200, config))
+      .mockResolvedValueOnce(new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } }))
+      .mockResolvedValueOnce(response(200, updated, '"2"'));
+    const client = new FlagsClient({ sdkKey: 'key', baseUrl: 'http://flags', fetch: fetcher });
+
+    await client.initialize();
+    const { promise, resolve } = Promise.withResolvers<void>();
+    setTimeout(resolve, 0);
+    await promise;
+    expect(client.isEnabled('x', {})).toBe(false);
+    expect(fetcher).toHaveBeenCalledTimes(3);
     client.close();
   });
 });

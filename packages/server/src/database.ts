@@ -69,6 +69,7 @@ const migrationUrls = [
   percentageMigrationUrl,
   targetingRulesMigrationUrl,
   new URL('../migrations/2026-08-29T08-00-00.000Z-sdk-keys.sql', import.meta.url),
+  new URL('../migrations/2026-08-29T08-30-00.000Z-environment-config-version.sql', import.meta.url),
   new URL('../migrations/2026-08-29T08-00-00.000Z-sdk-config-version.sql', import.meta.url),
 ];
 

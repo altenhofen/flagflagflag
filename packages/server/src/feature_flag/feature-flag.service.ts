@@ -3,12 +3,14 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
   PreconditionFailedException,
 } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
-import type { Repository } from 'typeorm';
-import { ENVIRONMENT_REPOSITORY } from '../environment/environment.service.js';
+import type { EntityManager, Repository } from 'typeorm';
+import { ConfigEventService } from '../sdk/config-events.js';
 import { EnvironmentEntity } from '../environment/environment.entity.js';
+import { ENVIRONMENT_REPOSITORY } from '../environment/environment.service.js';
 import type {
   CreateFeatureFlag,
   EvaluationAttributes,
@@ -39,6 +41,7 @@ export class FeatureFlagService {
     private readonly repository: Repository<FeatureFlagEntity>,
     @Inject(ENVIRONMENT_REPOSITORY)
     private readonly environmentRepository: Repository<EnvironmentEntity>,
+    @Optional() private readonly configEvents?: ConfigEventService,
   ) {}
 
   private readonly evaluation = new FeatureFlagEvaluation();
@@ -77,12 +80,17 @@ export class FeatureFlagService {
       rollout: data.rollout,
       rules: data.rules,
     });
+    let version: number;
     try {
-      await this.repository.insert(flag);
+      version = await this.repository.manager.transaction(async (tx) => {
+        await tx.insert(FeatureFlagEntity, flag);
+        return this.incrementConfigVersion(tx, environmentId);
+      });
     } catch (error) {
       if (this.isConstraintError(error)) throw new ConflictException('Feature flag already exists');
       throw error;
     }
+    this.configEvents?.publish({ environmentId, version });
     return this.toResource(flag);
   }
 
@@ -99,12 +107,17 @@ export class FeatureFlagService {
     if (expectedVersion !== undefined && flag.version !== expectedVersion) {
       throw new PreconditionFailedException('Feature flag version does not match');
     }
+    let version: number;
     if (data.name !== undefined) flag.name = data.name;
     if (data.enabled !== undefined) flag.enabled = data.enabled;
     if (data.defaultValue !== undefined) flag.defaultValue = data.defaultValue;
     if (data.rollout !== undefined) flag.rollout = data.rollout;
     if (data.rules !== undefined) flag.rules = data.rules;
-    await this.repository.save(flag);
+    version = await this.repository.manager.transaction(async (tx) => {
+      await tx.save(FeatureFlagEntity, flag);
+      return this.incrementConfigVersion(tx, environmentId);
+    });
+    this.configEvents?.publish({ environmentId, version });
     return this.toResource(flag);
   }
 
@@ -112,7 +125,11 @@ export class FeatureFlagService {
     await this.getEnvironment(projectId, environmentId);
     const flag = await this.repository.findOneBy({ key, environmentId });
     if (!flag) throw new NotFoundException('Feature flag not found');
-    await this.repository.remove(flag);
+    const version = await this.repository.manager.transaction(async (tx) => {
+      await tx.remove(FeatureFlagEntity, flag);
+      return this.incrementConfigVersion(tx, environmentId);
+    });
+    this.configEvents?.publish({ environmentId, version });
   }
 
   async isEnabled(
@@ -129,6 +146,13 @@ export class FeatureFlagService {
         defaultValue: flag.defaultValue, rollout: flag.rollout, rules: parsedRules.data },
       attributes,
     );
+  }
+
+  private async incrementConfigVersion(tx: EntityManager, environmentId: string): Promise<number> {
+    await tx.increment(EnvironmentEntity, { id: environmentId }, 'configVersion', 1);
+    const environment = await tx.findOneBy(EnvironmentEntity, { id: environmentId });
+    if (!environment) throw new NotFoundException('Environment not found');
+    return environment.configVersion;
   }
 
   private toResource(flag: FeatureFlagEntity): FeatureFlag {

@@ -25,4 +25,7 @@ export class EnvironmentEntity {
   })
   @JoinColumn({ name: 'projectId' })
   project!: ProjectEntity;
+
+  @Column({ type: 'integer', default: 0 })
+  configVersion!: number;
 }

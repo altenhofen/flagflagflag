@@ -107,8 +107,10 @@ export class SdkService {
     }]));
     const fingerprint = JSON.stringify(flags);
     const record = await this.versions.findOneBy({ environmentId: environment.id });
-    const configVersion = record?.fingerprint === fingerprint ? record.version : (record?.version ?? 0) + 1;
-    if (!record || record.fingerprint !== fingerprint) {
+    const configVersion = environment.configVersion ?? (
+      record?.fingerprint === fingerprint ? record.version : (record?.version ?? 0) + 1
+    );
+    if (environment.configVersion === undefined && (!record || record.fingerprint !== fingerprint)) {
       await this.versions.save({ environmentId: environment.id, fingerprint, version: configVersion });
     }
     return {

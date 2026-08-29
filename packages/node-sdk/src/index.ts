@@ -16,22 +16,30 @@ export interface FlagsClientOptions {
 export class FlagsClient {
   private readonly sdkKey: string;
   private readonly url: string;
+  private readonly eventsUrl: string;
   private readonly intervalMs: number;
   private readonly request: typeof globalThis.fetch;
   private config: SdkConfig | null = null;
   private etag: string | undefined;
   private timer: ReturnType<typeof setInterval> | undefined;
+  private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  private sseAbort: AbortController | undefined;
+  private reconnectAttempt = 0;
+  private closed = false;
   private refreshPromise: Promise<boolean> | undefined;
 
   constructor(options: FlagsClientOptions) {
     this.sdkKey = options.sdkKey;
     this.url = `${options.baseUrl.replace(/\/$/, '')}/api/v1/sdk/config`;
-    this.intervalMs = options.refreshIntervalMs ?? 30000;
+    this.eventsUrl = this.url.replace(/\/config$/, '/events');
+    this.intervalMs = options.refreshIntervalMs ?? 300000;
     this.request = options.fetch ?? globalThis.fetch;
   }
 
   async initialize(): Promise<void> {
     await this.refresh();
+    if (this.closed) return;
+    this.connectSse();
     if (!this.timer) this.timer = setInterval(() => void this.refresh(), this.intervalMs);
   }
 
@@ -55,8 +63,76 @@ export class FlagsClient {
   }
 
   close(): void {
+    if (this.closed) return;
+    this.closed = true;
     if (this.timer) clearInterval(this.timer);
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.timer = undefined;
+    this.reconnectTimer = undefined;
+    this.sseAbort?.abort();
+    this.sseAbort = undefined;
+  }
+
+  private connectSse(reconnect = false): void {
+    if (this.closed || this.sseAbort) return;
+    const controller = new AbortController();
+    this.sseAbort = controller;
+    void this.consumeSse(controller.signal, reconnect).then((shouldReconnect) => {
+      if (this.sseAbort === controller) this.sseAbort = undefined;
+      if (!this.closed && shouldReconnect) this.scheduleReconnect();
+    });
+  }
+
+  private async consumeSse(signal: AbortSignal, reconnect: boolean): Promise<boolean> {
+    try {
+      const response = await this.request(this.eventsUrl, {
+        headers: { Accept: 'text/event-stream', Authorization: `Bearer ${this.sdkKey}` },
+        signal,
+      });
+      if (!response.ok) return true;
+      if (response.headers.get('content-type')?.startsWith('text/event-stream') !== true || !response.body) {
+        return false;
+      }
+      this.reconnectAttempt = 0;
+      if (reconnect) await this.refresh();
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (!signal.aborted) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        buffer += decoder.decode(chunk.value, { stream: true });
+        const messages = buffer.split(/\n\n/);
+        buffer = messages.pop() ?? '';
+        for (const message of messages) this.handleSseMessage(message);
+      }
+      return !signal.aborted;
+    } catch {
+      return !signal.aborted;
+    }
+  }
+
+  private handleSseMessage(message: string): void {
+    const eventName = message.match(/^event:\s*(.+)$/m)?.[1];
+    if (eventName !== 'config.updated') return;
+    try {
+      const data = JSON.parse(message.match(/^data:\s*(.+)$/m)?.[1] ?? '') as { version?: unknown };
+      if (typeof data.version === 'number' && (!this.config || data.version > this.config.configVersion)) {
+        void this.refresh();
+      }
+    } catch {
+      // Ignore malformed invalidation messages.
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.closed || this.reconnectTimer) return;
+    const base = Math.min(30000, 1000 * 2 ** this.reconnectAttempt++);
+    const delay = Math.round(base * (0.8 + Math.random() * 0.4));
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = undefined;
+      this.connectSse(true);
+    }, delay);
   }
 
   private async fetchConfig(): Promise<boolean> {
