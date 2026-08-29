@@ -25,7 +25,7 @@ const help = `flagflagflag commands:
 connection options:
   --host <hostname>       API hostname (default: localhost)
   --port <port>           API port (default: 3000)
-  --username <username>   Better Auth username
+  --username <username>   Username
   --password <password>   Better Auth password
   --api-key <key>         SDK API key
 `;

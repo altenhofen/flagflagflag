@@ -2,6 +2,7 @@ import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import { useState } from 'react';
 import type { CliSettings } from './settings.js';
+import { WizardLayout, wizardColors } from './wizard-layout.js';
 
 export interface SettingsWizardProps {
   initialSettings: CliSettings;
@@ -11,11 +12,11 @@ export interface SettingsWizardProps {
 type Setting = keyof CliSettings;
 
 const steps: Array<{ key: Setting; label: string; mask?: string }> = [
-  { key: 'host', label: 'API hostname' },
-  { key: 'port', label: 'API port' },
-  { key: 'username', label: 'Better Auth username' },
-  { key: 'password', label: 'Better Auth password', mask: '*' },
-  { key: 'apiKey', label: 'SDK API key (optional)', mask: '*' },
+  { key: 'host', label: 'Host' },
+  { key: 'port', label: 'Port' },
+  { key: 'username', label: 'Username' },
+  { key: 'password', label: 'Password', mask: '*' },
+  { key: 'apiKey', label: 'API key (optional)', mask: '*' },
 ];
 
 export function SettingsWizard({
@@ -57,13 +58,33 @@ export function SettingsWizard({
   }
 
   return (
-    <Box flexDirection="column">
-      <Text color="redBright" bold>flagflagflag connection setup</Text>
-      <Text color="gray">Saved locally with restrictive file permissions.</Text>
-      <Text>
-        {step.label}: <TextInput value={value} onChange={setValue} onSubmit={submit} mask={step.mask} />
-      </Text>
-      {error ? <Text color="redBright">! {error}</Text> : null}
-    </Box>
+    <WizardLayout
+      title="Connection setup"
+      subtitle="Save the details flagflagflag uses to reach your API."
+      step={index + 1}
+      totalSteps={steps.length}
+      stepLabel={step.label}
+      footer="enter continue  ·  blank API key skips  ·  ctrl+c quit"
+    >
+      <Box flexDirection="column">
+        <Text color={wizardColors.ember} bold>
+          › <Text color="white">{step.label}</Text>
+        </Text>
+        <Box marginTop={1}>
+          <Text color={wizardColors.muted}>  </Text>
+          <TextInput
+            value={value}
+            onChange={setValue}
+            onSubmit={submit}
+            mask={step.mask}
+          />
+        </Box>
+        {error ? (
+          <Text color="redBright">
+            {'  '}! {error}
+          </Text>
+        ) : null}
+      </Box>
+    </WizardLayout>
   );
 }

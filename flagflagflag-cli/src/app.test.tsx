@@ -62,11 +62,33 @@ describe('flagflagflag wizard', () => {
     expect(instance.lastFrame()).toContain('Environment name');
     instance.unmount();
   });
-  it('creates a project, environment, and flag through the wizard', async () => {
+  it('sets up a project without creating a feature flag', async () => {
     const api = createApi();
     const instance = render(<App api={api} />);
 
-    for (const value of ['Demo', 'staging', 'checkout', 'y']) {
+    for (const value of ['Demo', 'staging', 'n']) {
+      await tick();
+      instance.stdin.write(value);
+      await tick();
+      instance.stdin.write('\r');
+    }
+    await tick();
+
+    expect(api.createProject).toHaveBeenCalledWith('Demo');
+    expect(api.createEnvironment).toHaveBeenCalledWith(
+      'project-1',
+      'staging',
+    );
+    expect(api.createFlag).not.toHaveBeenCalled();
+    expect(instance.lastFrame()).toContain('Project ready');
+    instance.unmount();
+  });
+
+  it('creates a project, environment, and optional flag through the wizard', async () => {
+    const api = createApi();
+    const instance = render(<App api={api} />);
+
+    for (const value of ['Demo', 'staging', 'y', 'checkout', 'y']) {
       await tick();
       instance.stdin.write(value);
       await tick();
@@ -85,7 +107,7 @@ describe('flagflagflag wizard', () => {
       'project-1',
       'staging',
     );
-    expect(instance.lastFrame()).toContain('Created checkout');
+    expect(instance.lastFrame()).toContain('Project ready');
     instance.unmount();
   });
 });

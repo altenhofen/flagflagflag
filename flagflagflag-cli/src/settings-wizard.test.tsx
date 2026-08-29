@@ -16,4 +16,22 @@ describe('connection settings wizard', () => {
     expect(instance.lastFrame()).toContain('flags.example.test');
     instance.unmount();
   });
+  it('calls the credential field Username', async () => {
+    const instance = render(
+      <SettingsWizard
+        initialSettings={defaultSettings}
+        onComplete={async () => undefined}
+      />,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    instance.stdin.write('\r');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    instance.stdin.write('\r');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(instance.lastFrame()).toContain('Username');
+    expect(instance.lastFrame()).not.toContain('Better Auth username');
+    instance.unmount();
+  });
 });

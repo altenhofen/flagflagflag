@@ -8,7 +8,8 @@ The CLI is the terminal control surface for projects, environments, and feature
 flags. It provides:
 
 - `flag3 tui`: an interactive CRUD dashboard.
-- `flagflagflag wizard`: a guided project, environment, and flag creation flow.
+- `flagflagflag wizard`: a guided project and environment setup flow with an
+  optional feature flag.
 - Direct commands for project creation, environment creation, flag creation, and
   flag evaluation.
 
@@ -67,10 +68,10 @@ Run the connection wizard directly:
 flag3 config
 ```
 
-The wizard stores hostname, port, Better Auth username/password, and SDK API
-key locally. The file is created with `0700` parent-directory and `0600` file
-permissions. Credentials are stored locally in plaintext; protect the account
-and configuration directory accordingly.
+The wizard stores host, port, username/password, and SDK API key locally. The
+file is created with `0700` parent-directory and `0600` file permissions.
+Credentials are stored locally in plaintext; protect the account and
+configuration directory accordingly.
 
 Command-line options override environment variables, which override saved
 settings. `FLAGFLAGFLAG_URL` overrides the host and port pair. Host and port
