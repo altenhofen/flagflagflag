@@ -1,5 +1,5 @@
 {
-  "name": "flagflagflag-cli",
+  "name": "@flagflagflag/cli",
   "version": "0.0.1",
   "description": "Interactive CLI for flagflagflag feature flags.",
   "type": "module",
@@ -9,14 +9,11 @@
   },
   "files": ["dist"],
   "scripts": {
-    "prebuild": "pnpm --dir ../flagflagflag-ts-sdk build",
     "build": "tsc -p tsconfig.json",
-    "pretest": "pnpm --dir ../flagflagflag-ts-sdk build",
     "test": "vitest run",
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@flagflagflag/ts-sdk": "workspace:*",
     "ink": "^6.0.1",
     "ink-text-input": "^6.0.0",
     "react": "^19.1.1"

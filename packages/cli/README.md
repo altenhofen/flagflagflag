@@ -30,15 +30,13 @@ pnpm test
 pnpm start --help
 ```
 
-The `prebuild` and `pretest` scripts build the sibling
-`../flagflagflag-ts-sdk` package first. The CLI imports the SDK through the
-`@flagflagflag/ts-sdk` package dependency.
+The CLI talks directly to the server API and does not depend on an SDK package.
 
 ## Connection and authentication
 
 The CLI API client talks to the server over HTTP. Mutating operations authenticate
-with Better Auth username/password credentials. Flag evaluation uses the renamed
-TypeScript SDK and sends its API key as `X-API-Key`.
+with Better Auth username/password credentials. Flag evaluation uses the server's
+anonymous feature-flag read endpoint.
 
 Connection options can be supplied on the command line:
 

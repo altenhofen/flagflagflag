@@ -1,4 +1,3 @@
-import { FlagClient } from '@flagflagflag/ts-sdk';
 
 export interface Project {
   id: string;
@@ -203,13 +202,11 @@ export class FlagApiClient implements FlagApi {
     projectId: string,
     environment: string,
   ): Promise<boolean> {
-    const client = new FlagClient({
-      baseUrl: this.baseUrl,
-      apiKey: this.apiKey,
-      projectId,
-      environment,
-    });
-    return client.isEnabled(name);
+    const response = await this.request<{ enabled: boolean }>(
+      `/feature-flags/${encodeURIComponent(name)}?projectId=${encodeURIComponent(projectId)}&environment=${encodeURIComponent(environment)}`,
+      { method: 'GET' },
+    );
+    return response.enabled;
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {
