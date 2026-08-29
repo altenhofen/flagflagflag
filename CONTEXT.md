@@ -8,6 +8,9 @@ This context defines feature flags, their evaluation inputs, and the targeting b
 A named boolean capability scoped to one project environment, with optional percentage rollout and targeting rules.
 _Avoid_: Toggle, switch
 
+**Feature Flag Evaluation**:
+The decision process that determines whether a Feature Flag is enabled for an Evaluation Context, including enabled state, Targeting Rules, and Percentage Rollout.
+
 **Project**:
 A namespace that owns environments and the feature flags configured within them.
 _Avoid_: Application, account

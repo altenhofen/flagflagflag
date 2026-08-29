@@ -10,6 +10,7 @@ import { ENVIRONMENT_REPOSITORY } from '../environment/environment.service.js';
 import { EnvironmentEntity } from '../environment/environment.entity.js';
 import type { EvaluationAttributes, TargetingRule } from './schemas.js';
 import { TargetingRulesSchema } from './schemas.js';
+import { FeatureFlagEvaluation } from './feature-flag-evaluation.js';
 import { FeatureFlagEntity } from './feature-flag.entity.js';
 
 export const FEATURE_FLAG_REPOSITORY = Symbol('FEATURE_FLAG_REPOSITORY');
@@ -31,6 +32,7 @@ export class FeatureFlagService {
     @Inject(ENVIRONMENT_REPOSITORY)
     private readonly environmentRepository: Repository<EnvironmentEntity>,
   ) {}
+  private readonly evaluation = new FeatureFlagEvaluation(() => Math.random());
 
   async isEnabled(
     name: string,
@@ -55,14 +57,18 @@ export class FeatureFlagService {
     }
 
     const parsedRules = TargetingRulesSchema.safeParse(flag.rules);
-    if (
-      !parsedRules.success ||
-      !parsedRules.data.every((rule) => matchesRule(rule, attributes))
-    ) {
+    if (!parsedRules.success) {
       return false;
     }
 
-    return flag.percentage >= 100 || Math.random() * 100 < flag.percentage;
+    return this.evaluation.evaluate(
+      {
+        enabled: flag.enabled,
+        percentage: flag.percentage,
+        rules: parsedRules.data,
+      },
+      attributes,
+    );
   }
   async list(
     environmentName: string,
@@ -207,58 +213,5 @@ export class FeatureFlagService {
       throw new NotFoundException('Environment not found');
     }
     return environment;
-  }
-}
-
-function matchesRule(
-  rule: TargetingRule,
-  attributes: EvaluationAttributes,
-): boolean {
-  if (!(rule.attribute in attributes)) {
-    return false;
-  }
-
-  const attribute = attributes[rule.attribute];
-  switch (rule.operator) {
-    case 'equals':
-      return !Array.isArray(rule.value) && attribute === rule.value;
-    case 'notEquals':
-      return !Array.isArray(rule.value) && attribute !== rule.value;
-    case 'in':
-      return (
-        typeof attribute === 'string' &&
-        Array.isArray(rule.value) &&
-        rule.value.includes(attribute)
-      );
-    case 'contains':
-      return (
-        typeof attribute === 'string' &&
-        typeof rule.value === 'string' &&
-        attribute.includes(rule.value)
-      );
-    case 'greaterThan':
-      return (
-        typeof attribute === 'number' &&
-        typeof rule.value === 'number' &&
-        attribute > rule.value
-      );
-    case 'greaterThanOrEqual':
-      return (
-        typeof attribute === 'number' &&
-        typeof rule.value === 'number' &&
-        attribute >= rule.value
-      );
-    case 'lessThan':
-      return (
-        typeof attribute === 'number' &&
-        typeof rule.value === 'number' &&
-        attribute < rule.value
-      );
-    case 'lessThanOrEqual':
-      return (
-        typeof attribute === 'number' &&
-        typeof rule.value === 'number' &&
-        attribute <= rule.value
-      );
   }
 }
