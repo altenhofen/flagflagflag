@@ -1,14 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
-import type * as Ink from 'ink';
-import type { ReactElement } from 'react';
-
-vi.mock('ink', async () => {
-  const actual = await vi.importActual<typeof Ink>('ink');
-  return { ...actual, render: vi.fn() };
-});
-
-import { render } from 'ink';
-import { runCli } from './cli.js';
+import { describe, expect, it } from 'vitest';
+import { runCommand } from './command.js';
+import type { CommandUi } from './command.js';
 import type { CliSettings, SettingsStore } from './settings.js';
 
 const settings: CliSettings = {
@@ -19,46 +11,39 @@ const settings: CliSettings = {
   apiKey: '',
 };
 
-describe('CLI Ink lifecycle', () => {
+describe('CLI command lifecycle', () => {
   it('waits for settings teardown before mounting the project wizard', async () => {
-    const renderMock = vi.mocked(render);
-    const exit = Promise.withResolvers<void>();
     const lifecycle: string[] = [];
-    const settingsInstance = {
-      clear: vi.fn(() => lifecycle.push('clear')),
-      unmount: vi.fn(() => lifecycle.push('unmount')),
-      waitUntilExit: vi.fn(() => exit.promise),
-    };
-    const projectInstance = { unmount: vi.fn() };
-    renderMock.mockImplementation(() => {
-      const instance = renderMock.mock.calls.length === 1
-        ? settingsInstance
-        : projectInstance;
-      return instance as unknown as ReturnType<typeof render>;
-    });
-
     const store: SettingsStore = {
-      load: vi.fn(async () => ({ ...settings })),
-      save: vi.fn(async () => undefined),
+      load: async () => settings,
+      save: async () => undefined,
     };
-    const runPromise = runCli(['wizard'], { settings: store, write: vi.fn() });
+    const ui: CommandUi = {
+      settings: async (_store, afterSave) => {
+        lifecycle.push('settings-mounted');
+        lifecycle.push('settings-unmounted');
+        await Promise.resolve();
+        lifecycle.push('settings-exited');
+        return (await afterSave?.(settings)) ?? 0;
+      },
+      wizard: async () => {
+        lifecycle.push('project-wizard-mounted');
+        return 0;
+      },
+      dashboard: async () => 0,
+    };
 
-    await vi.waitFor(() => expect(renderMock).toHaveBeenCalledOnce());
-    const settingsWizard = renderMock.mock.calls[0][0] as ReactElement<{
-      onComplete: (nextSettings: CliSettings) => Promise<void>;
-    }>;
-    const completion = settingsWizard.props.onComplete(settings);
-    await vi.waitFor(() => expect(settingsInstance.unmount).toHaveBeenCalledOnce());
-    expect(lifecycle).toEqual(['clear', 'unmount']);
+    const result = await runCommand(
+      { argv: ['wizard'], settings: store },
+      ui,
+    );
 
-    expect(renderMock).toHaveBeenCalledOnce();
-    exit.resolve();
-    await vi.waitFor(() => expect(renderMock).toHaveBeenCalledTimes(2));
-    const projectWizard = renderMock.mock.calls[1][0] as ReactElement<{
-      onComplete: () => void;
-    }>;
-    projectWizard.props.onComplete();
-    await completion;
-    await expect(runPromise).resolves.toBe(0);
+    expect(result).toEqual({ exitCode: 0, output: '' });
+    expect(lifecycle).toEqual([
+      'settings-mounted',
+      'settings-unmounted',
+      'settings-exited',
+      'project-wizard-mounted',
+    ]);
   });
 });
