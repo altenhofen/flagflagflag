@@ -3,12 +3,18 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  PreconditionFailedException,
 } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import type { Repository } from 'typeorm';
 import { ENVIRONMENT_REPOSITORY } from '../environment/environment.service.js';
 import { EnvironmentEntity } from '../environment/environment.entity.js';
-import type { EvaluationAttributes, TargetingRule } from './schemas.js';
+import type {
+  CreateFeatureFlag,
+  EvaluationAttributes,
+  TargetingRule,
+  Rollout,
+} from './schemas.js';
 import { TargetingRulesSchema } from './schemas.js';
 import { FeatureFlagEvaluation } from './feature-flag-evaluation.js';
 import { FeatureFlagEntity } from './feature-flag.entity.js';
@@ -16,12 +22,14 @@ import { FeatureFlagEntity } from './feature-flag.entity.js';
 export const FEATURE_FLAG_REPOSITORY = Symbol('FEATURE_FLAG_REPOSITORY');
 
 export interface FeatureFlag {
+  key: string;
   name: string;
-  projectId: string;
-  environment: string;
+  environmentId: string;
   enabled: boolean;
-  percentage: number;
+  defaultValue: boolean;
+  rollout: Rollout | null;
   rules: TargetingRule[];
+  version: number;
 }
 
 @Injectable()
@@ -32,186 +40,124 @@ export class FeatureFlagService {
     @Inject(ENVIRONMENT_REPOSITORY)
     private readonly environmentRepository: Repository<EnvironmentEntity>,
   ) {}
-  private readonly evaluation = new FeatureFlagEvaluation(() => Math.random());
+
+  private readonly evaluation = new FeatureFlagEvaluation();
+
+  async list(
+    projectId: string,
+    environmentId: string,
+    options: { limit?: number; cursor?: string } = {},
+  ): Promise<FeatureFlag[]> {
+    await this.getEnvironment(projectId, environmentId);
+    const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
+    const flags = await this.repository.find({
+      where: { environmentId },
+      order: { key: 'ASC' },
+      take: limit + 1,
+      ...(options.cursor ? { skip: 1 } : {}),
+    });
+    return flags.slice(0, limit).map((flag) => this.toResource(flag));
+  }
+
+  async get(projectId: string, environmentId: string, key: string): Promise<FeatureFlag> {
+    await this.getEnvironment(projectId, environmentId);
+    const flag = await this.repository.findOneBy({ key, environmentId });
+    if (!flag) throw new NotFoundException('Feature flag not found');
+    return this.toResource(flag);
+  }
+
+  async create(projectId: string, environmentId: string, data: CreateFeatureFlag): Promise<FeatureFlag> {
+    await this.getEnvironment(projectId, environmentId);
+    const flag = this.repository.create({
+      key: data.key,
+      name: data.name,
+      environmentId,
+      enabled: data.enabled,
+      defaultValue: data.defaultValue,
+      rollout: data.rollout,
+      rules: data.rules,
+    });
+    try {
+      await this.repository.insert(flag);
+    } catch (error) {
+      if (this.isConstraintError(error)) throw new ConflictException('Feature flag already exists');
+      throw error;
+    }
+    return this.toResource(flag);
+  }
+
+  async update(
+    projectId: string,
+    environmentId: string,
+    key: string,
+    data: Partial<Omit<CreateFeatureFlag, 'key'>>,
+    expectedVersion?: number,
+  ): Promise<FeatureFlag> {
+    await this.getEnvironment(projectId, environmentId);
+    const flag = await this.repository.findOneBy({ key, environmentId });
+    if (!flag) throw new NotFoundException('Feature flag not found');
+    if (expectedVersion !== undefined && flag.version !== expectedVersion) {
+      throw new PreconditionFailedException('Feature flag version does not match');
+    }
+    if (data.name !== undefined) flag.name = data.name;
+    if (data.enabled !== undefined) flag.enabled = data.enabled;
+    if (data.defaultValue !== undefined) flag.defaultValue = data.defaultValue;
+    if (data.rollout !== undefined) flag.rollout = data.rollout;
+    if (data.rules !== undefined) flag.rules = data.rules;
+    await this.repository.save(flag);
+    return this.toResource(flag);
+  }
+
+  async remove(projectId: string, environmentId: string, key: string): Promise<void> {
+    await this.getEnvironment(projectId, environmentId);
+    const flag = await this.repository.findOneBy({ key, environmentId });
+    if (!flag) throw new NotFoundException('Feature flag not found');
+    await this.repository.remove(flag);
+  }
 
   async isEnabled(
-    name: string,
-    environmentName: string,
     projectId: string,
+    environmentId: string,
+    key: string,
     attributes: EvaluationAttributes = {},
   ): Promise<boolean> {
-    const environment = await this.environmentRepository.findOneBy({
-      name: environmentName,
-      projectId,
-    });
-    if (!environment) {
-      return false;
-    }
-
-    const flag = await this.repository.findOneBy({
-      name,
-      environmentId: environment.id,
-    });
-    if (!flag?.enabled) {
-      return false;
-    }
-
+    const flag = await this.get(projectId, environmentId, key);
     const parsedRules = TargetingRulesSchema.safeParse(flag.rules);
-    if (!parsedRules.success) {
-      return false;
-    }
-
+    if (!parsedRules.success) return flag.defaultValue;
     return this.evaluation.evaluate(
-      {
-        enabled: flag.enabled,
-        percentage: flag.percentage,
-        rules: parsedRules.data,
-      },
+      { key: flag.key, environmentId: flag.environmentId, enabled: flag.enabled,
+        defaultValue: flag.defaultValue, rollout: flag.rollout, rules: parsedRules.data },
       attributes,
     );
   }
-  async list(
-    environmentName: string,
-    projectId: string,
-  ): Promise<FeatureFlag[]> {
-    const environment = await this.getEnvironment(projectId, environmentName);
-    const flags = await this.repository.find({
-      where: { environmentId: environment.id },
-      order: { name: 'ASC' },
-    });
-    return flags.map(({ name, enabled, percentage, rules }) => ({
-      name,
-      projectId,
-      environment: environment.name,
-      enabled,
-      percentage,
-      rules,
-    }));
-  }
 
-  async create(
-    name: string,
-    enabled: boolean,
-    environmentName: string,
-    projectId: string,
-    percentage: number,
-    rules: TargetingRule[],
-  ): Promise<FeatureFlag> {
-    const environment = await this.getEnvironment(projectId, environmentName);
-
-    try {
-      await this.repository.insert(
-        this.repository.create({
-          name,
-          environmentId: environment.id,
-          enabled,
-          percentage,
-          rules,
-        }),
-      );
-    } catch (error) {
-      const driverError =
-        error instanceof QueryFailedError ? error.driverError : undefined;
-      const code =
-        typeof driverError === 'object' &&
-        driverError !== null &&
-        'code' in driverError
-          ? driverError.code
-          : undefined;
-
-      if (
-        typeof code === 'string' &&
-        (code === '23505' || code.startsWith('SQLITE_CONSTRAINT'))
-      ) {
-        throw new ConflictException('Feature flag already exists');
-      }
-      throw error;
-    }
-
+  private toResource(flag: FeatureFlagEntity): FeatureFlag {
     return {
-      name,
-      projectId,
-      environment: environment.name,
-      enabled,
-      percentage,
-      rules,
-    };
-  }
-  async update(
-    name: string,
-    enabled: boolean,
-    environmentName: string,
-    projectId: string,
-    percentage: number | undefined,
-    rules: TargetingRule[] | undefined,
-  ): Promise<FeatureFlag> {
-    const environment = await this.getEnvironment(projectId, environmentName);
-    const flag = await this.repository.findOneBy({
-      name,
-      environmentId: environment.id,
-    });
-    if (!flag) {
-      throw new NotFoundException('Feature flag not found');
-    }
-    flag.enabled = enabled;
-    if (percentage !== undefined) {
-      flag.percentage = percentage;
-    }
-    if (rules !== undefined) {
-      flag.rules = rules;
-    }
-    await this.repository.save(flag);
-    return {
-      name,
-      projectId,
-      environment: environment.name,
-      enabled,
-      percentage: flag.percentage,
+      key: flag.key,
+      name: flag.name,
+      environmentId: flag.environmentId,
+      enabled: flag.enabled,
+      defaultValue: flag.defaultValue,
+      rollout: flag.rollout,
+      version: flag.version,
       rules: flag.rules,
     };
   }
 
-  async remove(
-    name: string,
-    environmentName: string,
-    projectId: string,
-  ): Promise<void> {
-    const environment = await this.getEnvironment(projectId, environmentName);
-    const flag = await this.repository.findOneBy({
-      name,
-      environmentId: environment.id,
-    });
-    if (!flag) {
-      throw new NotFoundException('Feature flag not found');
-    }
-    await this.repository.remove(flag);
-  }
-
-  async setEnabled(
-    name: string,
-    enabled: boolean,
-    environmentName: string,
-    projectId: string,
-    percentage = 100,
-  ): Promise<void> {
-    const environment = await this.getEnvironment(projectId, environmentName);
-    await this.repository.upsert(
-      { name, environmentId: environment.id, enabled, percentage },
-      ['name', 'environmentId'],
-    );
-  }
-
-  private async getEnvironment(
-    projectId: string,
-    environmentName: string,
-  ): Promise<EnvironmentEntity> {
-    const environment = await this.environmentRepository.findOneBy({
-      name: environmentName,
-      projectId,
-    });
-    if (!environment) {
-      throw new NotFoundException('Environment not found');
-    }
+  private async getEnvironment(projectId: string, environmentId: string): Promise<EnvironmentEntity> {
+    const environment = await this.environmentRepository.findOneBy({ id: environmentId, projectId });
+    if (!environment) throw new NotFoundException('Environment not found');
     return environment;
+  }
+
+  private isConstraintError(error: unknown): boolean {
+    if (!(error instanceof QueryFailedError)) return false;
+    const driverError = error.driverError;
+    const code =
+      typeof driverError === 'object' && driverError !== null && 'code' in driverError
+        ? driverError.code
+        : undefined;
+    return typeof code === 'string' &&
+      (code === '23505' || code.startsWith('SQLITE_CONSTRAINT'));
   }
 }

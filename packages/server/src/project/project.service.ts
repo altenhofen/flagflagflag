@@ -42,12 +42,12 @@ export class ProjectService {
     return { id: project.id, name: project.name };
   }
 
-  async update(id: string, name: string): Promise<Project> {
+  async update(id: string, name?: string): Promise<Project> {
     const project = await this.repository.findOneBy({ id });
     if (!project) {
       throw new NotFoundException('Project not found');
     }
-    project.name = name;
+    if (name !== undefined) project.name = name;
     await this.insert(project, true);
     return { id: project.id, name: project.name };
   }

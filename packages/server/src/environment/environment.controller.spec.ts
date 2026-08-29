@@ -61,10 +61,13 @@ describe('EnvironmentController', () => {
     expect(development.id).not.toBe(staging.id);
   });
 
-  it('lists, updates, and deletes an environment', async () => {
+  it('lists environments in a collection envelope and manages nested resources', async () => {
     const created = await controller.create('project-1', { name: 'staging' });
 
-    await expect(controller.list('project-1')).resolves.toEqual([created]);
+    await expect(controller.list('project-1')).resolves.toEqual({
+      data: [created],
+      pagination: { nextCursor: null },
+    });
     await expect(
       controller.update('project-1', created.id, { name: 'production' }),
     ).resolves.toEqual({

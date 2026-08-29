@@ -1,5 +1,5 @@
 import { AllowAnonymous } from '../auth/allow-anonymous.decorator.js';
-import { CanActivate, Controller, ExecutionContext, Get, Injectable, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { CanActivate, Controller, Delete, ExecutionContext, Get, HttpCode, Injectable, Param, Post, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import type { EnvironmentEntity } from '../environment/environment.entity.js';
 import { SdkService } from './sdk.service.js';
@@ -35,5 +35,36 @@ export class SdkController {
       return;
     }
     response.json(config);
+  }
+}
+
+@Controller('projects/:projectId/environments/:environmentId/sdk-keys')
+export class SdkKeyManagementController {
+  constructor(private readonly sdk: SdkService) {}
+
+  @Get()
+  list(
+    @Param('projectId') projectId: string,
+    @Param('environmentId') environmentId: string,
+  ) {
+    return this.sdk.listKeys(projectId, environmentId);
+  }
+
+  @Post()
+  create(
+    @Param('projectId') projectId: string,
+    @Param('environmentId') environmentId: string,
+  ) {
+    return this.sdk.createKey(environmentId, projectId);
+  }
+
+  @Delete(':keyId')
+  @HttpCode(204)
+  revoke(
+    @Param('projectId') projectId: string,
+    @Param('environmentId') environmentId: string,
+    @Param('keyId') keyId: string,
+  ): Promise<void> {
+    return this.sdk.revokeKey(projectId, environmentId, keyId);
   }
 }

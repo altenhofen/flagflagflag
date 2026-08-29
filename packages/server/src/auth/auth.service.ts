@@ -23,7 +23,19 @@ const UNIQUE_VIOLATIONS: Record<string, boolean> = {
 export interface PublicUser {
   id: string;
   username: string;
+  email: string;
+  name: string;
 }
+
+function toPublicUser(user: UserEntity): PublicUser {
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    name: user.name,
+  };
+}
+
 
 @Injectable()
 export class AuthService {
@@ -43,7 +55,7 @@ export class AuthService {
         passwordHash: `${salt}$${hash}`,
       });
       const created = await this.users.findOneBy({ username: user.username });
-      return { id: created!.id, username: user.username };
+      return toPublicUser(created!);
     } catch (error) {
       if (!isUniqueViolation(error)) {
         throw error;
@@ -58,6 +70,14 @@ export class AuthService {
       throw new UnauthorizedException('Incorrect username or password.');
     }
     return user;
+  }
+
+  async findById(userId: string): Promise<PublicUser> {
+    const user = await this.users.findOneBy({ id: userId });
+    if (!user) {
+      throw new UnauthorizedException('Invalid session');
+    }
+    return toPublicUser(user);
   }
 
   async changePassword(

@@ -1,1 +1,1 @@
-alter table "feature_flag" add column "percentage" integer not null default 100;
+-- Percentage rollout is represented by the nullable rollout object on feature_flag.

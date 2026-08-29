@@ -12,15 +12,21 @@ import {
 } from '@nestjs/common';
 import { EnvironmentService } from './environment.service.js';
 import type { Environment } from './environment.service.js';
-import { CreateEnvironmentSchema } from './schemas.js';
+import { CreateEnvironmentSchema, UpdateEnvironmentSchema } from './schemas.js';
 
 @Controller('projects/:projectId/environments')
 export class EnvironmentController {
   constructor(private readonly environmentService: EnvironmentService) {}
 
   @Get()
-  list(@Param('projectId') projectId: string): Promise<Environment[]> {
-    return this.environmentService.list(projectId);
+  async list(@Param('projectId') projectId: string): Promise<{
+    data: Environment[];
+    pagination: { nextCursor: null };
+  }> {
+    return {
+      data: await this.environmentService.list(projectId),
+      pagination: { nextCursor: null },
+    };
   }
 
   @Get(':id')
@@ -49,7 +55,7 @@ export class EnvironmentController {
     @Param('id') id: string,
     @Body() body: unknown,
   ): Promise<Environment> {
-    const parsed = CreateEnvironmentSchema.safeParse(body);
+    const parsed = UpdateEnvironmentSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(parsed.error.issues);
     }

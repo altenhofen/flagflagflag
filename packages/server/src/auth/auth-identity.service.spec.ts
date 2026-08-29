@@ -8,6 +8,8 @@ import type { UserEntity } from './user.entity.js';
 const user = {
   id: 'user-1',
   username: 'flag3',
+  email: 'flag3@example.com',
+  name: 'Flag Three',
 } as UserEntity;
 
 function createIdentity(
@@ -37,14 +39,21 @@ function createIdentity(
 }
 
 describe('AuthIdentityService', () => {
-  it('verifies credentials before issuing a session token', async () => {
+  it('verifies credentials before issuing the ADR token response', async () => {
     const verify = vi.fn(async () => user);
     const signAsync = vi.fn(async () => 'signed-token');
     const { identity, jwt } = createIdentity({ verify, signAsync });
 
     await expect(identity.authenticate('flag3', 'flag3')).resolves.toEqual({
-      token: 'signed-token',
+      accessToken: 'signed-token',
+      tokenType: 'Bearer',
       expiresAt: expect.any(String),
+      user: {
+        id: 'user-1',
+        username: 'flag3',
+        email: 'flag3@example.com',
+        name: 'Flag Three',
+      },
     });
     expect(verify).toHaveBeenCalledWith('flag3', 'flag3');
     expect(signAsync).toHaveBeenCalledWith({
@@ -67,7 +76,7 @@ describe('AuthIdentityService', () => {
     expect(signAsync).not.toHaveBeenCalled();
   });
 
-  it('verifies session tokens into authenticated identities', async () => {
+  it('verifies bearer session tokens into authenticated identities', async () => {
     const { identity } = createIdentity();
 
     await expect(identity.authenticateToken('signed-token')).resolves.toEqual({

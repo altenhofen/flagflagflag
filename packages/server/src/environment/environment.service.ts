@@ -62,13 +62,13 @@ export class EnvironmentService {
   async update(
     projectId: string,
     id: string,
-    name: string,
+    name?: string,
   ): Promise<Environment> {
     const environment = await this.repository.findOneBy({ id, projectId });
     if (!environment) {
       throw new NotFoundException('Environment not found');
     }
-    environment.name = name;
+    if (name !== undefined) environment.name = name;
     await this.persist(environment, true);
     return { id: environment.id, name: environment.name, projectId };
   }

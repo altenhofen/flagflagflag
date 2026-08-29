@@ -22,8 +22,14 @@ export class ProjectController {
   constructor(private readonly projectService: ProjectService) {}
 
   @Get()
-  list(): Promise<Project[]> {
-    return this.projectService.list();
+  async list(): Promise<{
+    data: Project[];
+    pagination: { nextCursor: null };
+  }> {
+    return {
+      data: await this.projectService.list(),
+      pagination: { nextCursor: null },
+    };
   }
 
   @Get(':id')

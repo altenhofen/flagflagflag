@@ -39,13 +39,22 @@ describe('ProjectController', () => {
     expect(project.id).toEqual(expect.any(String));
   });
 
-  it('lists, updates, and deletes a project', async () => {
+  it('lists projects in a collection envelope', async () => {
     const created = await controller.create({ name: 'Payments' });
 
-    await expect(controller.list()).resolves.toEqual([created]);
-    await expect(
-      controller.update(created.id, { name: 'Billing' }),
-    ).resolves.toEqual({ id: created.id, name: 'Billing' });
+    await expect(controller.list()).resolves.toEqual({
+      data: [created],
+      pagination: { nextCursor: null },
+    });
+  });
+
+  it('updates, gets, and deletes a project by immutable id', async () => {
+    const created = await controller.create({ name: 'Payments' });
+
+    await expect(controller.update(created.id, { name: 'Billing' })).resolves.toEqual({
+      id: created.id,
+      name: 'Billing',
+    });
     await expect(controller.get(created.id)).resolves.toEqual({
       id: created.id,
       name: 'Billing',

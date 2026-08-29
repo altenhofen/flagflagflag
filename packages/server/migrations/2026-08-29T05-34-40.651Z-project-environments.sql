@@ -11,10 +11,15 @@ create table "environment" (
 );
 
 create table "feature_flag_normalized" (
-  "name" text not null,
+  "key" text not null,
   "environmentId" text not null references "environment" ("id") on delete cascade,
+  "name" text not null,
   "enabled" boolean not null default false,
-  primary key ("name", "environmentId")
+  "defaultValue" boolean not null default false,
+  "rollout" text,
+  "rules" text not null default '[]',
+  "version" integer not null default 1,
+  primary key ("key", "environmentId")
 );
 
 drop table "feature_flag";

@@ -1,1 +1,1 @@
-alter table "feature_flag" add column "rules" text not null default '[]';
+-- Targeting rules are created with the canonical feature_flag schema.

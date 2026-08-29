@@ -1,111 +1,133 @@
 import { describe, expect, it } from 'vitest';
 import { FeatureFlagEvaluation } from './feature-flag-evaluation.js';
 
+const baseFlag = {
+  key: 'new-checkout',
+  environmentId: 'staging-id',
+  enabled: true,
+  defaultValue: false,
+  rollout: null,
+  rules: [],
+};
+
 describe('FeatureFlagEvaluation', () => {
-  it('requires an enabled flag before evaluating rules or rollout', () => {
-    const evaluation = new FeatureFlagEvaluation(() => 0);
+  it('returns false for a disabled flag before rules or rollout', () => {
+    const evaluation = new FeatureFlagEvaluation();
 
     expect(
       evaluation.evaluate(
         {
+          ...baseFlag,
           enabled: false,
-          percentage: 100,
-          rules: [],
-        },
-        {},
-      ),
-    ).toBe(false);
-  });
-
-  it('requires every targeting rule to match', () => {
-    const evaluation = new FeatureFlagEvaluation(() => 0);
-
-    expect(
-      evaluation.evaluate(
-        {
-          enabled: true,
-          percentage: 100,
+          defaultValue: true,
+          rollout: { percentage: 100, attribute: 'userId' },
           rules: [
-            { attribute: 'plan', operator: 'equals', value: 'pro' },
-            { attribute: 'region', operator: 'in', value: ['eu', 'us'] },
+            {
+              id: 'enable-pro-users',
+              priority: 1,
+              result: true,
+              conditions: [
+                { attribute: 'plan', operator: 'equals', value: 'pro' },
+              ],
+            },
           ],
         },
-        { plan: 'pro', region: 'apac' },
+        { plan: 'pro', userId: 'user-1' },
       ),
     ).toBe(false);
   });
 
-  it('supports compatible operator comparisons', () => {
-    const evaluation = new FeatureFlagEvaluation(() => 0);
-
-    expect(
-      evaluation.evaluate(
+  it('uses AND semantics within a rule and returns its explicit result', () => {
+    const evaluation = new FeatureFlagEvaluation();
+    const flag = {
+      ...baseFlag,
+      rules: [
         {
-          enabled: true,
-          percentage: 100,
-          rules: [
-            { attribute: 'name', operator: 'contains', value: 'flag' },
-            { attribute: 'age', operator: 'greaterThanOrEqual', value: 18 },
-            { attribute: 'plan', operator: 'notEquals', value: 'free' },
+          id: 'pro-us',
+          priority: 10,
+          result: true,
+          conditions: [
+            { attribute: 'plan', operator: 'equals' as const, value: 'pro' },
+            { attribute: 'country', operator: 'in' as const, value: ['US', 'CA'] },
           ],
         },
-        { name: 'feature-flag', age: 21, plan: 'pro' },
-      ),
-    ).toBe(true);
-  });
-
-  it('rejects missing and mismatched attributes', () => {
-    const evaluation = new FeatureFlagEvaluation(() => 0);
-
-    expect(
-      evaluation.evaluate(
-        {
-          enabled: true,
-          percentage: 100,
-          rules: [{ attribute: 'age', operator: 'greaterThan', value: 18 }],
-        },
-        { age: '21' },
-      ),
-    ).toBe(false);
-
-    expect(
-      evaluation.evaluate(
-        {
-          enabled: true,
-          percentage: 100,
-          rules: [{ attribute: 'age', operator: 'notEquals', value: 18 }],
-        },
-        { age: '21' },
-      ),
-    ).toBe(false);
-  });
-
-  it('applies percentage rollout after matching rules', () => {
-    expect(
-      new FeatureFlagEvaluation(() => 0.5).evaluate(
-        { enabled: true, percentage: 50, rules: [] },
-        {},
-      ),
-    ).toBe(false);
-    expect(
-      new FeatureFlagEvaluation(() => 0.49).evaluate(
-        { enabled: true, percentage: 50, rules: [] },
-        {},
-      ),
-    ).toBe(true);
-  });
-
-  it('treats empty rules as a match and preserves rollout edges', () => {
-    const random = () => {
-      throw new Error('randomness should not be needed');
+      ],
     };
-    const evaluation = new FeatureFlagEvaluation(random);
+
+    expect(evaluation.evaluate(flag, { plan: 'pro', country: 'US' })).toBe(true);
+    expect(evaluation.evaluate(flag, { plan: 'pro', country: 'DE' })).toBe(false);
+  });
+
+  it('sorts rules by priority and uses the first matching rule', () => {
+    const evaluation = new FeatureFlagEvaluation();
+    const flag = {
+      ...baseFlag,
+      defaultValue: true,
+      rules: [
+        {
+          id: 'fallback-deny',
+          priority: 20,
+          result: false,
+          conditions: [
+            { attribute: 'plan', operator: 'equals' as const, value: 'pro' },
+          ],
+        },
+        {
+          id: 'priority-allow',
+          priority: 10,
+          result: true,
+          conditions: [
+            { attribute: 'plan', operator: 'equals' as const, value: 'pro' },
+          ],
+        },
+      ],
+    };
+
+    expect(evaluation.evaluate(flag, { plan: 'pro' })).toBe(true);
+    expect(evaluation.evaluate(flag, { plan: 'free' })).toBe(true);
+  });
+
+  it('supports the shared operator comparisons and rejects mismatched attributes', () => {
+    const evaluation = new FeatureFlagEvaluation();
+    const flag = {
+      ...baseFlag,
+      rules: [
+        {
+          id: 'compatible-operators',
+          priority: 1,
+          result: true,
+          conditions: [
+            { attribute: 'name', operator: 'contains' as const, value: 'flag' },
+            { attribute: 'age', operator: 'greaterThanOrEqual' as const, value: 18 },
+            { attribute: 'plan', operator: 'notEquals' as const, value: 'free' },
+          ],
+        },
+      ],
+    };
 
     expect(
-      evaluation.evaluate({ enabled: true, percentage: 0, rules: [] }, {}),
+      evaluation.evaluate(flag, { name: 'feature-flag', age: 21, plan: 'pro' }),
+    ).toBe(true);
+    expect(evaluation.evaluate(flag, { name: 'feature-flag', age: '21' })).toBe(false);
+  });
+
+  it('uses deterministic rollout after rules and defaultValue without rollout', () => {
+    const evaluation = new FeatureFlagEvaluation();
+
+    expect(
+      evaluation.evaluate(
+        { ...baseFlag, rollout: { percentage: 0, attribute: 'userId' } },
+        { userId: 'user-1' },
+      ),
     ).toBe(false);
     expect(
-      evaluation.evaluate({ enabled: true, percentage: 100, rules: [] }, {}),
+      evaluation.evaluate(
+        { ...baseFlag, rollout: { percentage: 100, attribute: 'userId' } },
+        { userId: 'user-1' },
+      ),
+    ).toBe(true);
+    expect(
+      evaluation.evaluate({ ...baseFlag, defaultValue: true }, { userId: 'user-1' }),
     ).toBe(true);
   });
 });

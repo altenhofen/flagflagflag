@@ -23,6 +23,12 @@ import {
   PROJECT_REPOSITORY,
   ProjectService,
 } from './project/project.service.js';
+import { RuntimeEvaluationController } from './runtime-evaluation/runtime-evaluation.controller.js';
+import {
+  RUNTIME_CONFIG_VERSION_REPOSITORY,
+  RuntimeEvaluationService,
+} from './runtime-evaluation/runtime-evaluation.service.js';
+import { SdkConfigVersionEntity } from './sdk/sdk-config-version.entity.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -41,6 +47,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     EnvironmentController,
     FeatureFlagController,
     ProjectController,
+    RuntimeEvaluationController,
   ],
   providers: [
     {
@@ -64,6 +71,14 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
         return featureFlagDataSource.getRepository(FeatureFlagEntity);
       },
     },
+    {
+      provide: RUNTIME_CONFIG_VERSION_REPOSITORY,
+      useFactory: async () => {
+        await initializeDatabase();
+        return featureFlagDataSource.getRepository(SdkConfigVersionEntity);
+      },
+    },
+    RuntimeEvaluationService,
     AppService,
     EnvironmentService,
     FeatureFlagService,

@@ -1,140 +1,96 @@
-import { AllowAnonymous } from '../auth/allow-anonymous.decorator.js';
 import {
   BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
+  Query,
   Patch,
   Post,
-  Query,
 } from '@nestjs/common';
 import { FeatureFlagService } from './feature-flag.service.js';
 import type { FeatureFlag } from './feature-flag.service.js';
 import {
   CreateFeatureFlagSchema,
-  EvaluateFeatureFlagSchema,
-  GetFeatureFlagSchema,
   UpdateFeatureFlagSchema,
 } from './schemas.js';
 
-@Controller('feature-flags')
+@Controller('projects/:projectId/environments/:environmentId/flags')
 export class FeatureFlagController {
   constructor(private readonly featureFlagService: FeatureFlagService) {}
 
   @Get()
-  async list(@Query() query: unknown): Promise<FeatureFlag[]> {
-    const parsed = GetFeatureFlagSchema.safeParse(query ?? {});
-    if (!parsed.success) {
-      throw new BadRequestException(parsed.error.issues);
+  async list(
+    @Param('projectId') projectId: string,
+    @Param('environmentId') environmentId: string,
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+  ): Promise<{ data: FeatureFlag[]; pagination: { nextCursor: null } }> {
+    const parsedLimit = limit === undefined ? undefined : Number(limit);
+    if (parsedLimit !== undefined && (!Number.isInteger(parsedLimit) || parsedLimit < 1)) {
+      throw new BadRequestException('limit must be a positive integer');
     }
-    return this.featureFlagService.list(
-      parsed.data.environment,
-      parsed.data.projectId,
-    );
+    return {
+      data: await this.featureFlagService.list(projectId, environmentId, { limit: parsedLimit, cursor }),
+      pagination: { nextCursor: null },
+    };
   }
 
   @Post()
-  async create(@Body() body: unknown): Promise<FeatureFlag> {
+  async create(
+    @Param('projectId') projectId: string,
+    @Param('environmentId') environmentId: string,
+    @Body() body: unknown,
+  ): Promise<FeatureFlag> {
     const parsed = CreateFeatureFlagSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(parsed.error.issues);
     }
-
-    return this.featureFlagService.create(
-      parsed.data.name,
-      parsed.data.enabled,
-      parsed.data.environment,
-      parsed.data.projectId,
-      parsed.data.percentage,
-      parsed.data.rules,
-    );
+    return this.featureFlagService.create(projectId, environmentId, parsed.data);
   }
 
-  @Patch(':name')
-  async update(
-    @Param('name') name: string,
-    @Query() query: unknown,
-    @Body() body: unknown,
+  @Get(':flagKey')
+  get(
+    @Param('projectId') projectId: string,
+    @Param('environmentId') environmentId: string,
+    @Param('flagKey') flagKey: string,
   ): Promise<FeatureFlag> {
-    const context = GetFeatureFlagSchema.safeParse(query ?? {});
-    const update = UpdateFeatureFlagSchema.safeParse(body);
-    if (!context.success || !update.success) {
-      throw new BadRequestException([
-        ...(context.success ? [] : context.error.issues),
-        ...(update.success ? [] : update.error.issues),
-      ]);
-    }
-
-    return this.featureFlagService.update(
-      name,
-      update.data.enabled,
-      context.data.environment,
-      context.data.projectId,
-      update.data.percentage,
-      update.data.rules,
-    );
+    return this.featureFlagService.get(projectId, environmentId, flagKey);
   }
 
-  @Delete(':name')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(
-    @Param('name') name: string,
-    @Query() query: unknown,
-  ): Promise<void> {
-    const parsed = GetFeatureFlagSchema.safeParse(query ?? {});
-    if (!parsed.success) {
-      throw new BadRequestException(parsed.error.issues);
-    }
-    await this.featureFlagService.remove(
-      name,
-      parsed.data.environment,
-      parsed.data.projectId,
-    );
-  }
-
-  @AllowAnonymous()
-  @HttpCode(HttpStatus.OK)
-  @Post(':name/evaluate')
-  async evaluate(
-    @Param('name') name: string,
+  @Patch(':flagKey')
+  async update(
+    @Param('projectId') projectId: string,
+    @Param('environmentId') environmentId: string,
+    @Param('flagKey') flagKey: string,
     @Body() body: unknown,
-  ): Promise<{ enabled: boolean }> {
-    const parsed = EvaluateFeatureFlagSchema.safeParse(body);
+    @Headers('if-match') ifMatch: string | undefined,
+  ): Promise<FeatureFlag> {
+    const parsed = UpdateFeatureFlagSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(parsed.error.issues);
     }
-
-    return {
-      enabled: await this.featureFlagService.isEnabled(
-        name,
-        parsed.data.environment,
-        parsed.data.projectId,
-        parsed.data.attributes,
-      ),
-    };
+    const normalized = ifMatch?.replace(/^"|"$/g, '');
+    return this.featureFlagService.update(
+      projectId,
+      environmentId,
+      flagKey,
+      parsed.data,
+      normalized && /^\d+$/.test(normalized) ? Number(normalized) : undefined,
+    );
   }
 
-  @AllowAnonymous()
-  @Get(':name')
-  async get(
-    @Param('name') name: string,
-    @Query() query: unknown,
-  ): Promise<{ enabled: boolean }> {
-    const parsed = GetFeatureFlagSchema.safeParse(query ?? {});
-    if (!parsed.success) {
-      throw new BadRequestException(parsed.error.issues);
-    }
-
-    return {
-      enabled: await this.featureFlagService.isEnabled(
-        name,
-        parsed.data.environment,
-        parsed.data.projectId,
-      ),
-    };
+  @Delete(':flagKey')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(
+    @Param('projectId') projectId: string,
+    @Param('environmentId') environmentId: string,
+    @Param('flagKey') flagKey: string,
+  ): Promise<void> {
+    return this.featureFlagService.remove(projectId, environmentId, flagKey);
   }
 }
