@@ -31,7 +31,8 @@ export function App({ api, onComplete }: AppProps) {
   async function submitProject(value: string) {
     setError(undefined);
     if (!value.trim()) {
-      setError('Project name is required');
+      setStep('done');
+      onComplete?.();
       return;
     }
 
@@ -109,6 +110,19 @@ export function App({ api, onComplete }: AppProps) {
   }
 
   if (step === 'done') {
+    if (!projectId) {
+      return (
+        <Box flexDirection="column">
+          <Text color="yellowBright" bold>
+            ○ Setup skipped
+          </Text>
+          <Text color="gray">
+            No project, environment, or feature flag was created.
+          </Text>
+        </Box>
+      );
+    }
+
     return (
       <Box flexDirection="column">
         <Text color="greenBright" bold>
@@ -124,7 +138,7 @@ export function App({ api, onComplete }: AppProps) {
 
   const detail = stepDetails[step];
   const prompt = {
-    project: 'Project name',
+    project: 'Project name (optional)',
     environment: 'Environment name',
     'flag-choice': 'Create a feature flag now? (y/N)',
     flag: 'Feature flag name',

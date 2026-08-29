@@ -48,6 +48,24 @@ describe('flagflagflag wizard', () => {
     instance.unmount();
   });
 
+  it('skips the dependent setup when the project name is blank', async () => {
+    const api = createApi();
+    const onComplete = vi.fn();
+    const instance = render(<App api={api} onComplete={onComplete} />);
+    await tick();
+
+    instance.stdin.write('\r');
+    await tick();
+
+    expect(api.createProject).not.toHaveBeenCalled();
+    expect(api.createEnvironment).not.toHaveBeenCalled();
+    expect(api.createFlag).not.toHaveBeenCalled();
+    expect(onComplete).toHaveBeenCalledOnce();
+    expect(instance.lastFrame()).toContain('Setup skipped');
+    expect(instance.lastFrame()).not.toContain('Environment name');
+    instance.unmount();
+  });
+
   it('creates a project before asking for an environment', async () => {
     const api = createApi();
     const instance = render(<App api={api} />);

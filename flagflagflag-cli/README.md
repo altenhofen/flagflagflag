@@ -13,6 +13,9 @@ flags. It provides:
 - Direct commands for project creation, environment creation, flag creation, and
   flag evaluation.
 
+Enter an empty project name to skip project setup entirely; the environment and
+feature-flag steps are skipped with it.
+
 The published package exposes both `flag3` and `flagflagflag` binaries. The
 short `flag3` name is the preferred interactive command.
 
