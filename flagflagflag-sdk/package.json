@@ -1,0 +1,19 @@
+{
+  "name": "@flagflagflag-sdk/core",
+  "version": "0.0.1",
+  "description": "A minimal TypeScript SDK for evaluating feature flags.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.2"
+  }
+}
