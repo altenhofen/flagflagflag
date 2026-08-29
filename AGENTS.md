@@ -4,9 +4,9 @@
 
 This repository contains three packages:
 
-- `flagflagflag-server/`: NestJS API, JWT (Nest standard) auth, SQLite/PostgreSQL persistence.
-- `flagflagflag-ts-sdk/`: browser/Node-compatible TypeScript feature-flag client.
-- `flagflagflag-cli/`: Ink-based interactive CLI and feature-flag commands.
+- `packages/flagflagflag-server/`: NestJS API, JWT (Nest standard) auth, SQLite/PostgreSQL persistence.
+- `packages/flagflagflag-ts-sdk/`: browser/Node-compatible TypeScript feature-flag client.
+- `packages/flagflagflag-cli/`: Ink-based interactive CLI and feature-flag commands.
 
 Run package commands from the package directory. Keep changes scoped to the package
 that owns the behavior.
@@ -32,7 +32,7 @@ transport responsibilities separate.
 - Validate untrusted input at the boundary before using it.
 - Keep domain methods small and deterministic; avoid speculative abstractions.
 
-## `flagflagflag-server/src`
+## `packages/flagflagflag-server/src`
 
 `app.module.ts` is the composition root. Register modules, controllers, providers,
 and cross-cutting infrastructure there.
@@ -42,7 +42,7 @@ Feature behavior belongs in its feature folder.
 
 `main.ts` owns process bootstrap. Nest's body parser is enabled; JSON bodies are parsed before guards run.
 
-## `flagflagflag-server/src/auth`
+## `packages/flagflagflag-server/src/auth`
 
 This folder owns JWT authentication and user management, database initialization, and the
 default-user seed.
@@ -51,13 +51,13 @@ default-user seed.
 - Keep auth configuration in `tokens.ts` and the module in `auth.module.ts`.
 - Keep seed behavior in `auth-seed.service.ts`.
 - Put auth request/data schemas in `schemas.ts` and validate with Zod.
-- Keep the local default credentials documented in `flagflagflag-server/docs/AUTH.md`.
+- Keep the local default credentials documented in `packages/flagflagflag-server/docs/AUTH.md`.
 - Never expose password hashes or internal account data in API responses.
 - Use the `@AllowAnonymous()` decorator to opt routes out of the global guard.
 
 The default local account is `flag3` / `flag3`. Treat it as development-only.
 
-## `flagflagflag-server/src/feature_flag`
+## `packages/flagflagflag-server/src/feature_flag`
 
 This folder owns feature flag routes, domain behavior, and feature flag schemas.
 
@@ -73,7 +73,7 @@ This folder owns feature flag routes, domain behavior, and feature flag schemas.
 Feature flag state is stored in the database. Projects own environments, and
 feature flags reference environments.
 
-## `flagflagflag-server/migrations`
+## `packages/flagflagflag-server/migrations`
 
 All backend database migrations belong here, including Better Auth schema migrations.
 Do not create parallel migration directories. Keep migration files reviewed and
@@ -82,23 +82,23 @@ compatible with both the configured SQLite and PostgreSQL targets.
 The application initializes the early Better Auth schema on startup; migration
 files remain the versioned database record.
 
-## `flagflagflag-server/test` and source tests
+## `packages/flagflagflag-server/test` and source tests
 
 - Unit tests live beside the source they exercise.
-- End-to-end tests live in `flagflagflag-server/test`.
+- End-to-end tests live in `packages/flagflagflag-server/test`.
 - Test observable HTTP behavior: status, response shape, authentication, and
   state transitions.
 - Use isolated temporary databases when testing fresh-database behavior.
 - Run:
 
 ```bash
-cd flagflagflag-server
+cd packages/flagflagflag-server
 pnpm build
 pnpm test
 pnpm test:e2e
 ```
 
-## `flagflagflag-ts-sdk`
+## `packages/flagflagflag-ts-sdk`
 
 The SDK exposes a small public surface:
 
@@ -115,7 +115,7 @@ evaluation.
 - Treat network errors, non-success responses, malformed responses, and unknown
   flags as disabled (`false`).
 - Keep the response parser defensive; only accept `{ enabled: boolean }`.
-- Build with the TypeScript compiler configured by `flagflagflag-ts-sdk/tsconfig.json`.
+- Build with the TypeScript compiler configured by `packages/flagflagflag-ts-sdk/tsconfig.json`.
 
 The SDK and server endpoint contract is:
 
@@ -124,7 +124,7 @@ GET /feature-flags/:name?projectId=:projectId&environment=:environment
 → { "enabled": boolean }
 ```
 
-## `flagflagflag-cli`
+## `packages/flagflagflag-cli`
 
 The CLI uses Ink for its interactive wizard and the renamed TypeScript SDK for
 flag evaluation. Keep API access behind the `FlagApi` interface so the wizard

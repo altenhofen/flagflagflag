@@ -16,7 +16,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@flagflagflag/ts-sdk": "file:../flagflagflag-ts-sdk",
+    "@flagflagflag/ts-sdk": "workspace:*",
     "ink": "^6.0.1",
     "ink-text-input": "^6.0.0",
     "react": "^19.1.1"
