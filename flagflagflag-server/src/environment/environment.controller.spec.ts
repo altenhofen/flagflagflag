@@ -61,6 +61,33 @@ describe('EnvironmentController', () => {
     expect(development.id).not.toBe(staging.id);
   });
 
+  it('lists, updates, and deletes an environment', async () => {
+    const created = await controller.create('project-1', { name: 'staging' });
+
+    await expect(controller.list('project-1')).resolves.toEqual([created]);
+    await expect(
+      controller.update('project-1', created.id, { name: 'production' }),
+    ).resolves.toEqual({
+      id: created.id,
+      name: 'production',
+      projectId: 'project-1',
+    });
+    await expect(
+      controller.get('project-1', created.id),
+    ).resolves.toEqual({
+      id: created.id,
+      name: 'production',
+      projectId: 'project-1',
+    });
+
+    await expect(
+      controller.remove('project-1', created.id),
+    ).resolves.toBeUndefined();
+    await expect(
+      controller.get('project-1', created.id),
+    ).rejects.toThrow('Environment not found');
+  });
+
   it('rejects environments for unknown projects', async () => {
     await expect(
       controller.create('missing-project', { name: 'development' }),

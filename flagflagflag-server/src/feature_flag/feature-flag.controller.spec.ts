@@ -138,6 +138,26 @@ describe('FeatureFlagController', () => {
     });
   });
 
+  it('lists, updates, and deletes a feature flag', async () => {
+    const context = { projectId: 'default', environment: 'development' };
+    const created = await controller.create({
+      ...context,
+      name: 'lifecycle',
+      enabled: false,
+    });
+
+    await expect(controller.list(context)).resolves.toEqual([created]);
+    await expect(
+      controller.update('lifecycle', context, { enabled: true }),
+    ).resolves.toEqual({ ...created, enabled: true });
+    await expect(controller.get('lifecycle', context)).resolves.toEqual({
+      enabled: true,
+    });
+
+    await expect(controller.remove('lifecycle', context)).resolves.toBeUndefined();
+    await expect(controller.list(context)).resolves.toEqual([]);
+  });
+
   it('rejects malformed flag creation requests', async () => {
     await expect(
       controller.create({ name: '', enabled: true }),

@@ -65,7 +65,7 @@ describe('Feature flags (e2e)', () => {
       .expect(201);
     const projectId = project.body.id as string;
 
-    await client
+    const environment = await client
       .post(`/projects/${projectId}/environments`)
       .send({ name: 'qa' })
       .expect(201);
@@ -91,6 +91,50 @@ describe('Feature flags (e2e)', () => {
       .get(`/feature-flags/${name}?projectId=${projectId}&environment=qa`)
       .expect(200)
       .expect({ enabled: true });
+
+    await client.get('/projects').expect(200);
+    await client
+      .get(`/projects/${projectId}/environments`)
+      .expect(200)
+      .expect([{ id: environment.body.id, name: 'qa', projectId }]);
+    await client
+      .patch(`/projects/${projectId}/environments/${environment.body.id}`)
+      .send({ name: 'quality-assurance' })
+      .expect(200)
+      .expect({
+        id: environment.body.id,
+        name: 'quality-assurance',
+        projectId,
+      });
+    await client
+      .patch(
+        `/feature-flags/${name}?projectId=${projectId}&environment=quality-assurance`,
+      )
+      .send({ enabled: false })
+      .expect(200)
+      .expect({
+        name,
+        projectId,
+        environment: 'quality-assurance',
+        enabled: false,
+      });
+    await request(app.getHttpServer())
+      .get(
+        `/feature-flags/${name}?projectId=${projectId}&environment=quality-assurance`,
+      )
+      .expect(200)
+      .expect({ enabled: false });
+    await client
+      .delete(
+        `/feature-flags/${name}?projectId=${projectId}&environment=quality-assurance`,
+      )
+      .expect(204);
+    await client
+      .delete(
+        `/projects/${projectId}/environments/${environment.body.id}`,
+      )
+      .expect(204);
+    await client.delete(`/projects/${projectId}`).expect(204);
   });
 
   afterEach(async () => {

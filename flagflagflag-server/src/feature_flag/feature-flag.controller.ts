@@ -3,8 +3,12 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -13,11 +17,24 @@ import type { FeatureFlag } from './feature-flag.service.js';
 import {
   CreateFeatureFlagSchema,
   GetFeatureFlagSchema,
+  UpdateFeatureFlagSchema,
 } from './schemas.js';
 
 @Controller('feature-flags')
 export class FeatureFlagController {
   constructor(private readonly featureFlagService: FeatureFlagService) {}
+
+  @Get()
+  async list(@Query() query: unknown): Promise<FeatureFlag[]> {
+    const parsed = GetFeatureFlagSchema.safeParse(query ?? {});
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.issues);
+    }
+    return this.featureFlagService.list(
+      parsed.data.environment,
+      parsed.data.projectId,
+    );
+  }
 
   @Post()
   async create(@Body() body: unknown): Promise<FeatureFlag> {
@@ -29,6 +46,46 @@ export class FeatureFlagController {
     return this.featureFlagService.create(
       parsed.data.name,
       parsed.data.enabled,
+      parsed.data.environment,
+      parsed.data.projectId,
+    );
+  }
+
+  @Patch(':name')
+  async update(
+    @Param('name') name: string,
+    @Query() query: unknown,
+    @Body() body: unknown,
+  ): Promise<FeatureFlag> {
+    const context = GetFeatureFlagSchema.safeParse(query ?? {});
+    const update = UpdateFeatureFlagSchema.safeParse(body);
+    if (!context.success || !update.success) {
+      throw new BadRequestException([
+        ...(context.success ? [] : context.error.issues),
+        ...(update.success ? [] : update.error.issues),
+      ]);
+    }
+
+    return this.featureFlagService.update(
+      name,
+      update.data.enabled,
+      context.data.environment,
+      context.data.projectId,
+    );
+  }
+
+  @Delete(':name')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async remove(
+    @Param('name') name: string,
+    @Query() query: unknown,
+  ): Promise<void> {
+    const parsed = GetFeatureFlagSchema.safeParse(query ?? {});
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.issues);
+    }
+    await this.featureFlagService.remove(
+      name,
       parsed.data.environment,
       parsed.data.projectId,
     );

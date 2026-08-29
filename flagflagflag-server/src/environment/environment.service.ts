@@ -7,8 +7,8 @@ import {
 import { randomUUID } from 'node:crypto';
 import { QueryFailedError } from 'typeorm';
 import type { Repository } from 'typeorm';
-import { PROJECT_REPOSITORY } from '../project/project.service.js';
 import { ProjectEntity } from '../project/project.entity.js';
+import { PROJECT_REPOSITORY } from '../project/project.service.js';
 import { EnvironmentEntity } from './environment.entity.js';
 
 export const ENVIRONMENT_REPOSITORY = Symbol('ENVIRONMENT_REPOSITORY');
@@ -28,6 +28,22 @@ export class EnvironmentService {
     private readonly projectRepository: Repository<ProjectEntity>,
   ) {}
 
+  async list(projectId: string): Promise<Environment[]> {
+    const environments = await this.repository.find({
+      where: { projectId },
+      order: { name: 'ASC' },
+    });
+    return environments.map(({ id, name }) => ({ id, name, projectId }));
+  }
+
+  async get(projectId: string, id: string): Promise<Environment> {
+    const environment = await this.repository.findOneBy({ id, projectId });
+    if (!environment) {
+      throw new NotFoundException('Environment not found');
+    }
+    return { id: environment.id, name: environment.name, projectId };
+  }
+
   async create(projectId: string, name: string): Promise<Environment> {
     const project = await this.projectRepository.findOneBy({ id: projectId });
     if (!project) {
@@ -39,9 +55,42 @@ export class EnvironmentService {
       name,
       projectId,
     });
+    await this.persist(environment);
+    return { id: environment.id, name: environment.name, projectId };
+  }
 
+  async update(
+    projectId: string,
+    id: string,
+    name: string,
+  ): Promise<Environment> {
+    const environment = await this.repository.findOneBy({ id, projectId });
+    if (!environment) {
+      throw new NotFoundException('Environment not found');
+    }
+    environment.name = name;
+    await this.persist(environment, true);
+    return { id: environment.id, name: environment.name, projectId };
+  }
+
+  async remove(projectId: string, id: string): Promise<void> {
+    const environment = await this.repository.findOneBy({ id, projectId });
+    if (!environment) {
+      throw new NotFoundException('Environment not found');
+    }
+    await this.repository.remove(environment);
+  }
+
+  private async persist(
+    environment: EnvironmentEntity,
+    updating = false,
+  ): Promise<void> {
     try {
-      await this.repository.insert(environment);
+      if (updating) {
+        await this.repository.save(environment);
+      } else {
+        await this.repository.insert(environment);
+      }
     } catch (error) {
       if (error instanceof QueryFailedError) {
         const driverError = error.driverError;
@@ -60,7 +109,5 @@ export class EnvironmentService {
       }
       throw error;
     }
-
-    return { id: environment.id, name: environment.name, projectId };
   }
 }

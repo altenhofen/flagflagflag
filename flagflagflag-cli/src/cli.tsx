@@ -1,5 +1,6 @@
 import { render } from 'ink';
 import { App } from './app.js';
+import { Dashboard } from './dashboard.js';
 import { FlagApiClient } from './api-client.js';
 import type { FlagApi } from './api-client.js';
 
@@ -9,11 +10,19 @@ export interface CliDependencies {
 }
 
 const help = `flagflagflag commands:
-  flagflagflag wizard
+  flag3 tui [connection options]
+  flagflagflag wizard [connection options]
   flagflagflag is-enabled <name> --project-id <id> --environment <name>
   flagflagflag project create <name>
   flagflagflag environment create <project-id> <name>
   flagflagflag flag create <name> --project-id <id> --environment <name> [--enabled]
+
+connection options:
+  --host <hostname>       API hostname (default: localhost)
+  --port <port>           API port (default: 3000)
+  --username <username>   Better Auth username
+  --password <password>   Better Auth password
+  --api-key <key>         SDK API key
 `;
 
 export async function runCli(
@@ -27,10 +36,10 @@ export async function runCli(
     return 0;
   }
 
-  const api = dependencies.api ?? createApiClient();
+  const api = dependencies.api ?? createApiClient(argv);
   try {
-    if (argv[0] === 'wizard') {
-      return await runWizard(api);
+    if (argv[0] === 'tui') {
+      return await runDashboard(api);
     }
     if (argv[0] === 'is-enabled') {
       return await evaluateFlag(argv.slice(1), api, dependencies.write);
@@ -104,12 +113,30 @@ function getOption(argv: string[], name: string): string | undefined {
   return index === -1 ? undefined : argv[index + 1];
 }
 
-function createApiClient(): FlagApiClient {
+function createApiClient(argv: string[]): FlagApiClient {
+  const host =
+    getOption(argv, '--host') ??
+    process.env.FLAGFLAGFLAG_HOST ??
+    'localhost';
+  const port =
+    getOption(argv, '--port') ??
+    process.env.FLAGFLAGFLAG_PORT ??
+    '3000';
   return new FlagApiClient({
-    baseUrl: process.env.FLAGFLAGFLAG_URL ?? 'http://localhost:3000',
-    username: process.env.FLAGFLAGFLAG_USERNAME ?? '',
-    password: process.env.FLAGFLAGFLAG_PASSWORD ?? '',
-    apiKey: process.env.FLAGFLAGFLAG_API_KEY,
+    baseUrl:
+      process.env.FLAGFLAGFLAG_URL ??
+      `http://${host}:${port}`,
+    username:
+      getOption(argv, '--username') ??
+      process.env.FLAGFLAGFLAG_USERNAME ??
+      '',
+    password:
+      getOption(argv, '--password') ??
+      process.env.FLAGFLAGFLAG_PASSWORD ??
+      '',
+    apiKey:
+      getOption(argv, '--api-key') ??
+      process.env.FLAGFLAGFLAG_API_KEY,
   });
 }
 
@@ -120,6 +147,22 @@ async function runWizard(api: FlagApi): Promise<number> {
     <App
       api={api}
       onComplete={() => {
+        unmount();
+        resolve(0);
+      }}
+    />,
+  );
+  unmount = instance.unmount;
+  return promise;
+}
+
+async function runDashboard(api: FlagApi): Promise<number> {
+  const { promise, resolve } = Promise.withResolvers<number>();
+  let unmount: () => void = () => undefined;
+  const instance = render(
+    <Dashboard
+      api={api}
+      onExit={() => {
         unmount();
         resolve(0);
       }}

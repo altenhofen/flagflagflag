@@ -39,6 +39,22 @@ describe('ProjectController', () => {
     expect(project.id).toEqual(expect.any(String));
   });
 
+  it('lists, updates, and deletes a project', async () => {
+    const created = await controller.create({ name: 'Payments' });
+
+    await expect(controller.list()).resolves.toEqual([created]);
+    await expect(
+      controller.update(created.id, { name: 'Billing' }),
+    ).resolves.toEqual({ id: created.id, name: 'Billing' });
+    await expect(controller.get(created.id)).resolves.toEqual({
+      id: created.id,
+      name: 'Billing',
+    });
+
+    await expect(controller.remove(created.id)).resolves.toBeUndefined();
+    await expect(controller.get(created.id)).rejects.toThrow('Project not found');
+  });
+
   it('rejects malformed project requests', async () => {
     await expect(controller.create({ name: '' })).rejects.toThrow();
   });

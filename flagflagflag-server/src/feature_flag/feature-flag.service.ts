@@ -47,6 +47,22 @@ export class FeatureFlagService {
     });
     return flag?.enabled ?? false;
   }
+  async list(
+    environmentName: string,
+    projectId: string,
+  ): Promise<FeatureFlag[]> {
+    const environment = await this.getEnvironment(projectId, environmentName);
+    const flags = await this.repository.find({
+      where: { environmentId: environment.id },
+      order: { name: 'ASC' },
+    });
+    return flags.map(({ name, enabled }) => ({
+      name,
+      projectId,
+      environment: environment.name,
+      enabled,
+    }));
+  }
 
   async create(
     name: string,
@@ -89,6 +105,40 @@ export class FeatureFlagService {
       environment: environment.name,
       enabled,
     };
+  }
+  async update(
+    name: string,
+    enabled: boolean,
+    environmentName: string,
+    projectId: string,
+  ): Promise<FeatureFlag> {
+    const environment = await this.getEnvironment(projectId, environmentName);
+    const flag = await this.repository.findOneBy({
+      name,
+      environmentId: environment.id,
+    });
+    if (!flag) {
+      throw new NotFoundException('Feature flag not found');
+    }
+    flag.enabled = enabled;
+    await this.repository.save(flag);
+    return { name, projectId, environment: environment.name, enabled };
+  }
+
+  async remove(
+    name: string,
+    environmentName: string,
+    projectId: string,
+  ): Promise<void> {
+    const environment = await this.getEnvironment(projectId, environmentName);
+    const flag = await this.repository.findOneBy({
+      name,
+      environmentId: environment.id,
+    });
+    if (!flag) {
+      throw new NotFoundException('Feature flag not found');
+    }
+    await this.repository.remove(flag);
   }
 
   async setEnabled(

@@ -4,6 +4,24 @@ import { App } from './app.js';
 import type { FlagApi } from './api-client.js';
 
 const createApi = (): FlagApi => ({
+  listProjects: vi.fn(async () => []),
+  updateProject: vi.fn(async () => ({ id: 'project-1', name: 'Demo' })),
+  deleteProject: vi.fn(async () => undefined),
+  listEnvironments: vi.fn(async () => []),
+  updateEnvironment: vi.fn(async () => ({
+    id: 'environment-1',
+    name: 'development',
+    projectId: 'project-1',
+  })),
+  deleteEnvironment: vi.fn(async () => undefined),
+  listFlags: vi.fn(async () => []),
+  updateFlag: vi.fn(async () => ({
+    name: 'checkout',
+    projectId: 'project-1',
+    environment: 'development',
+    enabled: false,
+  })),
+  deleteFlag: vi.fn(async () => undefined),
   createProject: vi.fn(async () => ({ id: 'project-1', name: 'Demo' })),
   createEnvironment: vi.fn(async () => ({
     id: 'environment-1',

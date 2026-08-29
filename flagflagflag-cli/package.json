@@ -4,14 +4,16 @@
   "description": "Interactive CLI for flagflagflag feature flags.",
   "type": "module",
   "bin": {
-    "flagflagflag": "dist/index.js"
+    "flagflagflag": "dist/index.js",
+    "flag3": "dist/index.js"
   },
   "files": ["dist"],
   "scripts": {
     "prebuild": "pnpm --dir ../flagflagflag-ts-sdk build",
     "build": "tsc -p tsconfig.json",
     "pretest": "pnpm --dir ../flagflagflag-ts-sdk build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "start": "node dist/index.js"
   },
   "dependencies": {
     "@flagflagflag/ts-sdk": "file:../flagflagflag-ts-sdk",

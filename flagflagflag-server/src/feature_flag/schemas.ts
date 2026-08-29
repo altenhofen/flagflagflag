@@ -15,3 +15,7 @@ export const GetFeatureFlagSchema = z.object({
 });
 
 export type CreateFeatureFlag = z.infer<typeof CreateFeatureFlagSchema>;
+
+export const UpdateFeatureFlagSchema = z.object({
+  enabled: z.boolean(),
+});

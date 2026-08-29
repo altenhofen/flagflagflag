@@ -19,14 +19,36 @@ export interface FeatureFlag {
 }
 
 export interface FlagApi {
+  listProjects(): Promise<Project[]>;
   createProject(name: string): Promise<Project>;
+  updateProject(id: string, name: string): Promise<Project>;
+  deleteProject(id: string): Promise<void>;
+  listEnvironments(projectId: string): Promise<Environment[]>;
   createEnvironment(projectId: string, name: string): Promise<Environment>;
+  updateEnvironment(
+    projectId: string,
+    id: string,
+    name: string,
+  ): Promise<Environment>;
+  deleteEnvironment(projectId: string, id: string): Promise<void>;
+  listFlags(projectId: string, environment: string): Promise<FeatureFlag[]>;
   createFlag(
     name: string,
     enabled: boolean,
     projectId: string,
     environment: string,
   ): Promise<FeatureFlag>;
+  updateFlag(
+    name: string,
+    enabled: boolean,
+    projectId: string,
+    environment: string,
+  ): Promise<FeatureFlag>;
+  deleteFlag(
+    name: string,
+    projectId: string,
+    environment: string,
+  ): Promise<void>;
   isEnabled(
     name: string,
     projectId: string,
@@ -54,7 +76,60 @@ export class FlagApiClient implements FlagApi {
     this.password = options.password;
     this.apiKey = options.apiKey ?? '';
   }
+  async listProjects(): Promise<Project[]> {
+    return this.request('/projects', { method: 'GET' });
+  }
 
+  async updateProject(id: string, name: string): Promise<Project> {
+    return this.request(`/projects/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    });
+  }
+
+  async deleteProject(id: string): Promise<void> {
+    await this.request<void>(`/projects/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async listEnvironments(projectId: string): Promise<Environment[]> {
+    return this.request(
+      `/projects/${encodeURIComponent(projectId)}/environments`,
+      { method: 'GET' },
+    );
+  }
+
+  async updateEnvironment(
+    projectId: string,
+    id: string,
+    name: string,
+  ): Promise<Environment> {
+    return this.request(
+      `/projects/${encodeURIComponent(projectId)}/environments/${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ name }),
+      },
+    );
+  }
+
+  async deleteEnvironment(projectId: string, id: string): Promise<void> {
+    await this.request<void>(
+      `/projects/${encodeURIComponent(projectId)}/environments/${encodeURIComponent(id)}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  async listFlags(
+    projectId: string,
+    environment: string,
+  ): Promise<FeatureFlag[]> {
+    return this.request(
+      `/feature-flags?projectId=${encodeURIComponent(projectId)}&environment=${encodeURIComponent(environment)}`,
+      { method: 'GET' },
+    );
+  }
   async createProject(name: string): Promise<Project> {
     return this.request('/projects', {
       method: 'POST',
@@ -79,6 +154,32 @@ export class FlagApiClient implements FlagApi {
       method: 'POST',
       body: JSON.stringify({ name, enabled, projectId, environment }),
     });
+  }
+
+  async updateFlag(
+    name: string,
+    enabled: boolean,
+    projectId: string,
+    environment: string,
+  ): Promise<FeatureFlag> {
+    return this.request(
+      `/feature-flags/${encodeURIComponent(name)}?projectId=${encodeURIComponent(projectId)}&environment=${encodeURIComponent(environment)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ enabled }),
+      },
+    );
+  }
+
+  async deleteFlag(
+    name: string,
+    projectId: string,
+    environment: string,
+  ): Promise<void> {
+    await this.request<void>(
+      `/feature-flags/${encodeURIComponent(name)}?projectId=${encodeURIComponent(projectId)}&environment=${encodeURIComponent(environment)}`,
+      { method: 'DELETE' },
+    );
   }
 
   async isEnabled(
@@ -108,6 +209,9 @@ export class FlagApiClient implements FlagApi {
     });
     if (!response.ok) {
       throw new Error(`Request failed (${response.status})`);
+    }
+    if (response.status === 204) {
+      return undefined as T;
     }
     return (await response.json()) as T;
   }

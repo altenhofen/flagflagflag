@@ -5,3 +5,5 @@ export const CreateProjectSchema = z.object({
 });
 
 export type CreateProject = z.infer<typeof CreateProjectSchema>;
+
+export const UpdateProjectSchema = CreateProjectSchema;
