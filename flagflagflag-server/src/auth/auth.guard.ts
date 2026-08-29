@@ -5,11 +5,11 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import { IS_ANONYMOUS_KEY } from './allow-anonymous.decorator.js';
 import { SESSION_COOKIE } from './tokens.js';
-import { JwtPayload } from './auth.service.js';
+import type { JwtPayload } from './auth-identity.service.js';
+import { AuthIdentityService } from './auth-identity.service.js';
 
 interface AuthenticatedRequest extends Request {
   user?: JwtPayload;
@@ -18,7 +18,7 @@ interface AuthenticatedRequest extends Request {
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
-    private readonly jwtService: JwtService,
+    private readonly identity: AuthIdentityService,
     private readonly reflector: Reflector,
   ) {}
 
@@ -37,12 +37,8 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Authentication required');
     }
 
-    try {
-      request.user = await this.jwtService.verifyAsync<JwtPayload>(token);
-      return true;
-    } catch {
-      throw new UnauthorizedException('Invalid session');
-    }
+    request.user = await this.identity.authenticateToken(token);
+    return true;
   }
 }
 

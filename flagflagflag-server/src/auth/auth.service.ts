@@ -4,11 +4,9 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { Repository } from 'typeorm';
 import { UserEntity } from './user.entity.js';
-import { SESSION_TTL_MS } from './tokens.js';
 import type { DefaultUser } from './schemas.js';
 
 export const USER_REPOSITORY = Symbol('auth:user-repo');
@@ -22,16 +20,6 @@ const UNIQUE_VIOLATIONS: Record<string, boolean> = {
   '23505': true,
 };
 
-export interface AuthToken {
-  token: string;
-  expiresAt: string;
-}
-
-export interface JwtPayload {
-  sub: string;
-  username: string;
-}
-
 export interface PublicUser {
   id: string;
   username: string;
@@ -41,16 +29,7 @@ export interface PublicUser {
 export class AuthService {
   constructor(
     @Inject(USER_REPOSITORY) private readonly users: Repository<UserEntity>,
-    private readonly jwt: JwtService,
   ) {}
-
-  async issueToken(user: UserEntity): Promise<AuthToken> {
-    const payload: JwtPayload = { sub: user.id, username: user.username };
-    return {
-      token: await this.jwt.signAsync(payload),
-      expiresAt: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
-    };
-  }
 
   async signUp(user: DefaultUser): Promise<PublicUser> {
     const digest = hashPassword(user.password);

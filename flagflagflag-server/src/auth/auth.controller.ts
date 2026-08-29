@@ -10,13 +10,21 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AllowAnonymous } from './allow-anonymous.decorator.js';
-import { AuthService, AuthToken, JwtPayload } from './auth.service.js';
+import {
+  AuthIdentityService,
+  AuthToken,
+  JwtPayload,
+} from './auth-identity.service.js';
+import { AuthService } from './auth.service.js';
 import { SESSION_COOKIE, SESSION_TTL_MS } from './tokens.js';
 import { ChangePasswordSchema, SignInSchema, SignUpSchema } from './schemas.js';
 
 @Controller('api/auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly identity: AuthIdentityService,
+  ) {}
 
   @AllowAnonymous()
   @Post('sign-in/username')
@@ -29,8 +37,9 @@ export class AuthController {
     if (!parsed.success) {
       throw new BadRequestException(parsed.error.issues);
     }
-    const token = await this.authService.issueToken(
-      await this.authService.verify(parsed.data.username, parsed.data.password),
+    const token = await this.identity.authenticate(
+      parsed.data.username,
+      parsed.data.password,
     );
     response.cookie(SESSION_COOKIE, token.token, {
       httpOnly: true,
@@ -53,8 +62,9 @@ export class AuthController {
       throw new BadRequestException(parsed.error.issues);
     }
     await this.authService.signUp(parsed.data);
-    const user = await this.authService.issueToken(
-      await this.authService.verify(parsed.data.username, parsed.data.password),
+    const user = await this.identity.authenticate(
+      parsed.data.username,
+      parsed.data.password,
     );
     response.cookie(SESSION_COOKIE, user.token, {
       httpOnly: true,
