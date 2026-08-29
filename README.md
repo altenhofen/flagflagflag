@@ -266,3 +266,4 @@ Package-specific source tests live beside the implementation. Server end-to-end 
 - [Server authentication](packages/server/docs/AUTH.md)
 - [CLI implementation and controls](packages/cli/README.md)
 - [Domain terminology](CONTEXT.md)
+- [Production API contract decision](docs/adr/0001-production-api-contract.md)
