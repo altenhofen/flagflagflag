@@ -65,4 +65,34 @@ describe('Ember CRUD dashboard', () => {
     expect(instance.lastFrame()).toContain('Payments');
     instance.unmount();
   });
+
+  it('moves the active project with the down arrow key', async () => {
+    const projects = [
+      { id: 'p1', name: 'Payments' },
+      { id: 'p2', name: 'Growth' },
+    ];
+    const dashboardApi: FlagApi = {
+      ...api,
+      listProjects: async () => projects,
+    };
+    const instance = render(<Dashboard api={dashboardApi} />);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+
+    instance.stdin.write('\u001b[B');
+    await new Promise((resolve) => setTimeout(resolve, 40));
+
+    expect(instance.lastFrame()).toContain('project: Growth');
+    instance.unmount();
+  });
+
+  it('uses down arrow to leave an empty section', async () => {
+    const instance = render(<Dashboard api={api} />);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+
+    instance.stdin.write('\u001b[B');
+    await new Promise((resolve) => setTimeout(resolve, 40));
+
+    expect(instance.lastFrame()).toContain('FLAGFLAGFLAG / ENVIRONMENTS');
+    instance.unmount();
+  });
 });

@@ -103,11 +103,19 @@ export function Dashboard({ api, onExit }: DashboardProps) {
       return;
     }
     if (key.upArrow || input === 'k') {
-      moveSelection(-1);
+      if (hasRecords()) {
+        moveSelection(-1);
+      } else {
+        moveSection(-1);
+      }
       return;
     }
     if (key.downArrow || input === 'j') {
-      moveSelection(1);
+      if (hasRecords()) {
+        moveSelection(1);
+      } else {
+        moveSection(1);
+      }
       return;
     }
     if (input === 'n') {
@@ -123,6 +131,7 @@ export function Dashboard({ api, onExit }: DashboardProps) {
       return;
     }
     if (confirmDelete && input === 'y') {
+
       void removeCurrent();
       return;
     }
@@ -130,6 +139,20 @@ export function Dashboard({ api, onExit }: DashboardProps) {
       setConfirmDelete(false);
     }
   });
+  function hasRecords(): boolean {
+    return section === 'projects'
+      ? projects.length > 0
+      : section === 'environments'
+        ? environments.length > 0
+        : flags.length > 0;
+  }
+
+  function moveSection(delta: number) {
+    const sections: Section[] = ['projects', 'environments', 'flags'];
+    const index = sections.indexOf(section);
+    const nextIndex = (index + delta + sections.length) % sections.length;
+    setSection(sections[nextIndex]);
+  }
 
   function currentItem(): Project | Environment | FeatureFlag | undefined {
     return section === 'projects'
