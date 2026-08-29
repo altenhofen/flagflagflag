@@ -21,6 +21,7 @@ import {
 
 @Controller('projects/:projectId/environments/:environmentId/flags')
 export class FeatureFlagController {
+  private readonly idempotentCreates = new Map<string, FeatureFlag>();
   constructor(private readonly featureFlagService: FeatureFlagService) {}
 
   @Get()
@@ -45,12 +46,20 @@ export class FeatureFlagController {
     @Param('projectId') projectId: string,
     @Param('environmentId') environmentId: string,
     @Body() body: unknown,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
   ): Promise<FeatureFlag> {
     const parsed = CreateFeatureFlagSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(parsed.error.issues);
     }
-    return this.featureFlagService.create(projectId, environmentId, parsed.data);
+    const cacheKey = idempotencyKey
+      ? `${projectId}:${environmentId}:${idempotencyKey}`
+      : undefined;
+    const cached = cacheKey ? this.idempotentCreates.get(cacheKey) : undefined;
+    if (cached) return cached;
+    const created = await this.featureFlagService.create(projectId, environmentId, parsed.data);
+    if (cacheKey) this.idempotentCreates.set(cacheKey, created);
+    return created;
   }
 
   @Get(':flagKey')

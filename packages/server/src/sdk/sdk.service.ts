@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import type { Repository } from 'typeorm';
 import type { EnvironmentEntity } from '../environment/environment.entity.js';
 import { ENVIRONMENT_REPOSITORY } from '../environment/environment.service.js';
@@ -36,6 +36,7 @@ export class SdkService {
     @Inject(ENVIRONMENT_REPOSITORY)
     private readonly environments?: Repository<EnvironmentEntity>,
   ) {}
+  private readonly logger = new Logger(SdkService.name);
 
   async authenticate(rawKey: string): Promise<EnvironmentEntity> {
     const key = await this.keys.findOne({
@@ -73,6 +74,7 @@ export class SdkService {
       revokedAt: null,
     });
     await this.keys.save(key);
+    this.logger.log(`SDK key created for environment ${environmentId}`);
     return {
       id: key.id,
       key: secret,
@@ -88,6 +90,7 @@ export class SdkService {
     if (!key) throw new NotFoundException('SDK key not found');
     if (!key.revokedAt) {
       key.revokedAt = new Date();
+      this.logger.log(`SDK key revoked for environment ${environmentId}`);
       await this.keys.save(key);
     }
   }
