@@ -1,0 +1,11 @@
+{
+  "name": "@flagflagflag/node-sdk",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": { "build": "tsc -p tsconfig.json", "test": "vitest run" },
+  "dependencies": { "@flagflagflag/evaluator": "workspace:*" },
+  "devDependencies": { "typescript": "^6.0.2", "vitest": "^4.1.2" }
+}

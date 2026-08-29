@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { createObserveModule } from '@nestjs/observe';
+import { SdkModule } from './sdk/sdk.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { EnvironmentController } from './environment/environment.controller.js';
 import { EnvironmentEntity } from './environment/environment.entity.js';
@@ -28,6 +29,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
 @Module({
   imports: [
     AuthModule,
+    SdkModule,
     ObserveModule.forRoot({
       appKey: 'YOUR_APP_KEY',
       appSecret: 'YOUR_APP_SECRET',

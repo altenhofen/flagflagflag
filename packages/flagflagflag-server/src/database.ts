@@ -6,6 +6,8 @@ import { EnvironmentEntity } from './environment/environment.entity.js';
 import { FeatureFlagEntity } from './feature_flag/feature-flag.entity.js';
 import { ProjectEntity } from './project/project.entity.js';
 import { UserEntity } from './auth/user.entity.js';
+import { SdkKeyEntity } from './sdk/sdk-key.entity.js';
+import { SdkConfigVersionEntity } from './sdk/sdk-config-version.entity.js';
 
 const isPostgres = process.env.DATABASE_URL?.startsWith('postgres') ?? false;
 const sqliteDatabase = process.env.SQLITE_DATABASE ?? './flagflagflag.sqlite';
@@ -24,6 +26,8 @@ export const featureFlagDataSource = isPostgres
         ProjectEntity,
         EnvironmentEntity,
         FeatureFlagEntity,
+        SdkKeyEntity,
+        SdkConfigVersionEntity,
       ],
       synchronize: false,
     })
@@ -35,6 +39,8 @@ export const featureFlagDataSource = isPostgres
         ProjectEntity,
         EnvironmentEntity,
         FeatureFlagEntity,
+        SdkKeyEntity,
+        SdkConfigVersionEntity,
       ],
       synchronize: false,
     });
@@ -62,6 +68,8 @@ const migrationUrls = [
   ),
   percentageMigrationUrl,
   targetingRulesMigrationUrl,
+  new URL('../migrations/2026-08-29T08-00-00.000Z-sdk-keys.sql', import.meta.url),
+  new URL('../migrations/2026-08-29T08-00-00.000Z-sdk-config-version.sql', import.meta.url),
 ];
 
 let initializationPromise: Promise<void> | undefined;
