@@ -113,7 +113,7 @@ Keyboard controls:
 ↑↓ / j,k  Move through records
 Tab       Switch resource section
 n         Create the selected resource
-e         Edit the selected record
+e         Edit projects/environments; toggle feature flags
 d         Start delete confirmation
 y / n     Confirm or cancel deletion
 r         Refresh records

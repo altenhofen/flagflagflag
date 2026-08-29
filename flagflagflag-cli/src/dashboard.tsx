@@ -123,7 +123,11 @@ export function Dashboard({ api, onExit }: DashboardProps) {
       return;
     }
     if (input === 'e') {
-      beginEdit();
+      if (section === 'flags') {
+        void toggleFlag();
+      } else {
+        beginEdit();
+      }
       return;
     }
     if (input === 'd' && currentItem()) {
@@ -194,18 +198,6 @@ export function Dashboard({ api, onExit }: DashboardProps) {
   function beginEdit() {
     setConfirmDelete(false);
     setInputValue('');
-    if (section === 'flags') {
-      if (!selectedFlag) {
-        return;
-      }
-      setForm({
-        resource: 'flag',
-        action: 'edit',
-        step: 'enabled',
-        value: selectedFlag.enabled ? 'y' : 'n',
-      });
-      return;
-    }
     if (section === 'projects') {
       if (!selectedProject) {
         return;
@@ -227,6 +219,24 @@ export function Dashboard({ api, onExit }: DashboardProps) {
       step: 'name',
       value: selectedEnvironment.name,
     });
+  }
+
+  async function toggleFlag() {
+    if (!selectedProject || !selectedEnvironment || !selectedFlag) {
+      return;
+    }
+    setError(undefined);
+    try {
+      await api.updateFlag(
+        selectedFlag.name,
+        !selectedFlag.enabled,
+        selectedProject.id,
+        selectedEnvironment.name,
+      );
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Request failed');
+    }
   }
 
   async function submitForm(value: string) {
@@ -272,21 +282,12 @@ export function Dashboard({ api, onExit }: DashboardProps) {
         }
         const enabled =
           value.toLowerCase() === 'y' || value.toLowerCase() === 'yes';
-        if (form.action === 'create') {
-          await api.createFlag(
-            form.value,
-            enabled,
-            selectedProject.id,
-            selectedEnvironment.name,
-          );
-        } else if (selectedFlag) {
-          await api.updateFlag(
-            selectedFlag.name,
-            enabled,
-            selectedProject.id,
-            selectedEnvironment.name,
-          );
-        }
+        await api.createFlag(
+          form.value,
+          enabled,
+          selectedProject.id,
+          selectedEnvironment.name,
+        );
       }
       setForm(undefined);
       setInputValue('');
@@ -364,7 +365,7 @@ export function Dashboard({ api, onExit }: DashboardProps) {
       {error ? <Text color="redBright">! {error}</Text> : null}
       {confirmDelete ? <Text color="yellow">Delete this record? y/n</Text> : null}
       <Text color="gray">────────────────────────────────────────────────────────────</Text>
-      <Text color="gray">↑↓ navigate  tab switch  n new  e edit  d delete  r refresh  q quit</Text>
+      <Text color="gray">↑↓ navigate  tab switch  n new  e edit/toggle  d delete  r refresh  q quit</Text>
     </Box>
   );
 }

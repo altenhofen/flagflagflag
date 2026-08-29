@@ -66,6 +66,56 @@ describe('Ember CRUD dashboard', () => {
     instance.unmount();
   });
 
+  it('toggles the selected feature flag with e', async () => {
+    let enabled = false;
+    const updateFlag = vi.fn(
+      async (
+        name: string,
+        nextEnabled: boolean,
+        projectId: string,
+        environment: string,
+      ) => {
+        enabled = nextEnabled;
+        return { name, projectId, environment, enabled };
+      },
+    );
+    const dashboardApi: FlagApi = {
+      ...api,
+      listProjects: async () => [{ id: 'p1', name: 'Payments' }],
+      listEnvironments: async () => [
+        { id: 'e1', name: 'staging', projectId: 'p1' },
+      ],
+      listFlags: async () => [
+        {
+          name: 'checkout',
+          projectId: 'p1',
+          environment: 'staging',
+          enabled,
+        },
+      ],
+      updateFlag,
+    };
+    const instance = render(<Dashboard api={dashboardApi} />);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+
+    instance.stdin.write('\t');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    instance.stdin.write('\t');
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    instance.stdin.write('e');
+    await new Promise((resolve) => setTimeout(resolve, 40));
+
+    expect(updateFlag).toHaveBeenCalledWith(
+      'checkout',
+      true,
+      'p1',
+      'staging',
+    );
+    expect(instance.lastFrame()).toContain('checkout');
+    expect(instance.lastFrame()).toContain('ON');
+    instance.unmount();
+  });
+
   it('moves the active project with the down arrow key', async () => {
     const projects = [
       { id: 'p1', name: 'Payments' },
