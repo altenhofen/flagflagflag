@@ -66,6 +66,11 @@ export interface FlagApiClientOptions {
   apiKey?: string;
 }
 
+interface AuthToken {
+  token: string;
+  expiresAt: string;
+}
+
 export class FlagApiClient implements FlagApi {
   private readonly baseUrl: string;
   private readonly username: string;
@@ -241,9 +246,10 @@ export class FlagApiClient implements FlagApi {
       throw new Error(`Authentication failed (${response.status})`);
     }
 
-    const setCookie = response.headers.get('set-cookie');
-    if (setCookie) {
-      this.cookie = setCookie.split(';', 1)[0];
+    const body = (await response.json()) as AuthToken;
+    if (typeof body.token !== 'string') {
+      throw new Error('Authentication failed (missing token)');
     }
+    this.cookie = `flagflagflag_session=${body.token}`;
   }
 }

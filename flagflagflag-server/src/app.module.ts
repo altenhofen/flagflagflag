@@ -1,18 +1,13 @@
 import { Module } from '@nestjs/common';
 import { createObserveModule } from '@nestjs/observe';
-import { AuthModule } from '@thallesp/nestjs-better-auth';
-import { auth } from './auth/auth.js';
-import { AuthSeedService } from './auth/auth-seed.service.js';
+import { AuthModule } from './auth/auth.module.js';
 import { EnvironmentController } from './environment/environment.controller.js';
 import { EnvironmentEntity } from './environment/environment.entity.js';
 import {
   ENVIRONMENT_REPOSITORY,
   EnvironmentService,
 } from './environment/environment.service.js';
-import {
-  featureFlagDataSource,
-  initializeDatabase,
-} from './database.js';
+import { featureFlagDataSource, initializeDatabase } from './database.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { FeatureFlagController } from './feature_flag/feature-flag.controller.js';
@@ -30,10 +25,9 @@ import {
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
-
 @Module({
   imports: [
-    AuthModule.forRoot({ auth }),
+    AuthModule,
     ObserveModule.forRoot({
       appKey: 'YOUR_APP_KEY',
       appSecret: 'YOUR_APP_SECRET',
@@ -72,7 +66,6 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     EnvironmentService,
     FeatureFlagService,
     ProjectService,
-    AuthSeedService,
   ],
 })
 export class AppModule {}

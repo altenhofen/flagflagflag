@@ -4,7 +4,7 @@
 
 This repository contains three packages:
 
-- `flagflagflag-server/`: NestJS API, Better Auth, SQLite/PostgreSQL persistence.
+- `flagflagflag-server/`: NestJS API, JWT (Nest standard) auth, SQLite/PostgreSQL persistence.
 - `flagflagflag-ts-sdk/`: browser/Node-compatible TypeScript feature-flag client.
 - `flagflagflag-cli/`: Ink-based interactive CLI and feature-flag commands.
 
@@ -40,21 +40,20 @@ and cross-cutting infrastructure there.
 `app.controller.ts` owns only application-level routes such as the root response.
 Feature behavior belongs in its feature folder.
 
-`main.ts` owns process bootstrap. Better Auth requires Nest's body parser to be
-disabled because the Better Auth integration installs the required parsers.
+`main.ts` owns process bootstrap. Nest's body parser is enabled; JSON bodies are parsed before guards run.
 
 ## `flagflagflag-server/src/auth`
 
-This folder owns Better Auth configuration, database initialization, and the
+This folder owns JWT authentication and user management, database initialization, and the
 default-user seed.
 
-- Use Better Auth APIs for credentials, sessions, password changes, and signup.
-- Keep auth configuration in `auth.ts`.
+- Wire auth through `@nestjs/jwt` for token signing and the global `APP_GUARD`.
+- Keep auth configuration in `tokens.ts` and the module in `auth.module.ts`.
 - Keep seed behavior in `auth-seed.service.ts`.
 - Put auth request/data schemas in `schemas.ts` and validate with Zod.
 - Keep the local default credentials documented in `flagflagflag-server/docs/AUTH.md`.
 - Never expose password hashes or internal account data in API responses.
-- Review authentication changes against the Better Auth integration docs.
+- Use the `@AllowAnonymous()` decorator to opt routes out of the global guard.
 
 The default local account is `flag3` / `flag3`. Treat it as development-only.
 

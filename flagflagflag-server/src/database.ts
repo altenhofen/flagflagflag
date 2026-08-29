@@ -5,6 +5,7 @@ import { Pool } from 'pg';
 import { EnvironmentEntity } from './environment/environment.entity.js';
 import { FeatureFlagEntity } from './feature_flag/feature-flag.entity.js';
 import { ProjectEntity } from './project/project.entity.js';
+import { UserEntity } from './auth/user.entity.js';
 
 const isPostgres = process.env.DATABASE_URL?.startsWith('postgres') ?? false;
 const sqliteDatabase = process.env.SQLITE_DATABASE ?? './flagflagflag.sqlite';
@@ -18,13 +19,23 @@ export const featureFlagDataSource = isPostgres
   ? new DataSource({
       type: 'postgres',
       url: process.env.DATABASE_URL,
-      entities: [ProjectEntity, EnvironmentEntity, FeatureFlagEntity],
+      entities: [
+        UserEntity,
+        ProjectEntity,
+        EnvironmentEntity,
+        FeatureFlagEntity,
+      ],
       synchronize: false,
     })
   : new DataSource({
       type: 'better-sqlite3',
       database: sqliteDatabase,
-      entities: [ProjectEntity, EnvironmentEntity, FeatureFlagEntity],
+      entities: [
+        UserEntity,
+        ProjectEntity,
+        EnvironmentEntity,
+        FeatureFlagEntity,
+      ],
       synchronize: false,
     });
 
@@ -33,8 +44,14 @@ const percentageMigrationUrl = new URL(
   import.meta.url,
 );
 const migrationUrls = [
-  new URL('../migrations/2026-08-29T05-34-40.649Z.sql', import.meta.url),
-  new URL('../migrations/2026-08-29T05-34-40.650Z-feature-flags.sql', import.meta.url),
+  new URL(
+    '../migrations/2026-08-29T06-15-30.000Z-app-user.sql',
+    import.meta.url,
+  ),
+  new URL(
+    '../migrations/2026-08-29T05-34-40.650Z-feature-flags.sql',
+    import.meta.url,
+  ),
   new URL(
     '../migrations/2026-08-29T05-34-40.651Z-project-environments.sql',
     import.meta.url,

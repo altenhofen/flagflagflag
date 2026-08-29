@@ -1,4 +1,4 @@
-import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
+import { AllowAnonymous } from '../auth/allow-anonymous.decorator.js';
 import {
   BadRequestException,
   Body,

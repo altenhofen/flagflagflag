@@ -1,10 +1,11 @@
 # Authentication
 
-The server uses [Better Auth](https://better-auth.com/) through
-`@thallesp/nestjs-better-auth`.
+The server uses NestJS's standard authentication stack: `@nestjs/jwt` for
+token signing/verification and a global `AuthGuard` registered with
+`APP_GUARD`. Routes are protected by default; `@AllowAnonymous()` opts out.
 
-Authentication uses username/password credentials and database-backed sessions.
-Better Auth routes are mounted below `/api/auth`.
+Authentication uses username/password credentials with JWT bearer sessions.
+Auth routes live below `/api/auth`.
 
 ## Configuration
 
@@ -33,10 +34,10 @@ DATABASE_URL=postgres://user:password@localhost:5432/flagflagflag
 The application selects PostgreSQL when `DATABASE_URL` starts with `postgres`.
 Otherwise it uses SQLite.
 
-Set the Better Auth URL when running somewhere other than local development:
+Set a strong signing secret outside local development:
 
 ```bash
-BETTER_AUTH_URL=https://flags.example.com
+JWT_SECRET=<random-secret>
 ```
 
 ## Default user
@@ -58,7 +59,7 @@ must be changed before exposing the service outside local development.
 Log in with the username endpoint:
 
 ```bash
-curl -i -c cookies.txt \
+curl -i \
   -X POST http://localhost:3000/api/auth/sign-in/username \
   -H 'Content-Type: application/json' \
   -d '{"username":"flag3","password":"flag3"}'
@@ -73,16 +74,16 @@ The response contains only the session token and its expiration time:
 }
 ```
 
-The response also sets the Better Auth session cookie. The cookie is the
-normal authentication mechanism for subsequent requests.
+The response also sets the `flagflagflag_session` cookie. The cookie is the
+normal authentication mechanism for subsequent requests; a
+`Authorization: Bearer <token>` header works as well.
 
 ## Creating users
 
-Create a user with the email signup endpoint. The username plugin allows the
-new account to be used with username login:
+Create a user with the email signup endpoint:
 
 ```bash
-curl -i -c new-user-cookies.txt \
+curl -i \
   -X POST http://localhost:3000/api/auth/sign-up/email \
   -H 'Content-Type: application/json' \
   -d '{
@@ -101,10 +102,10 @@ creation flow.
 
 ## Changing a password
 
-The request must include the authenticated Better Auth session cookie:
+The request must include the authenticated session cookie:
 
 ```bash
-curl -i -b new-user-cookies.txt \
+curl -i -b cookies.txt \
   -X POST http://localhost:3000/api/auth/change-password \
   -H 'Content-Type: application/json' \
   -d '{
@@ -123,36 +124,28 @@ A successful response is:
 
 ## Sessions and protected routes
 
-The NestJS Better Auth integration registers a global authentication guard.
-Routes are protected by default. The root health-style response and feature
-flag evaluation endpoint are explicitly anonymous so the current SDK can use
-them.
+The global `AuthGuard` registered via `APP_GUARD` protects routes by default.
+The root health-style response and feature flag evaluation endpoints are
+explicitly wrapped with `@AllowAnonymous()` so the SDK stays contract-stable.
 
-Authenticated requests send the session cookie saved during login:
-
-```bash
-curl -b cookies.txt http://localhost:3000/some-protected-route
-```
-
-Better Auth also provides its standard session and sign-out endpoints below
-`/api/auth`.
+Authenticated requests send the JWT saved from login either as
+`Authorization: Bearer <token>` or via the `flagflagflag_session` cookie.
 
 ## Database schema
 
-The Better Auth schema is checked in under:
+The JWT-auth user schema lives in:
 
 ```text
-migrations/2026-08-29T05-34-40.649Z.sql
+migrations/2026-08-29T06-15-30.000Z-app-user.sql
 ```
 
-The application reads and executes the migration files on startup to initialize
-the required tables. Projects own environments, and feature flags belong to an
-environment. Environment names are database values rather than an enum, so each
-project can define its own environments.
+The user table `app_user` stores:
 
-Feature flag evaluation accepts required `projectId` and `environment` query
-parameters. Create projects with `POST /projects`, environments with
-`POST /projects/:projectId/environments`, and flags with `POST /feature-flags`.
+- `id`
+- `username`
+- `email`
+- `name`
+- `passwordHash` (scrypt)
 
-The schemas use Better Auth's standard `user`, `session`, `account`, and
-`verification` tables and are designed to work with both SQLite and PostgreSQL.
+Authentication changes are persisted there; sessions are opaque bearer JWTs
+signed with `JWT_SECRET` and require no server-side storage.
