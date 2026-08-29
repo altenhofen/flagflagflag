@@ -16,6 +16,7 @@ import { FeatureFlagService } from './feature-flag.service.js';
 import type { FeatureFlag } from './feature-flag.service.js';
 import {
   CreateFeatureFlagSchema,
+  EvaluateFeatureFlagSchema,
   GetFeatureFlagSchema,
   UpdateFeatureFlagSchema,
 } from './schemas.js';
@@ -49,6 +50,7 @@ export class FeatureFlagController {
       parsed.data.environment,
       parsed.data.projectId,
       parsed.data.percentage,
+      parsed.data.rules,
     );
   }
 
@@ -73,6 +75,7 @@ export class FeatureFlagController {
       context.data.environment,
       context.data.projectId,
       update.data.percentage,
+      update.data.rules,
     );
   }
 
@@ -91,6 +94,28 @@ export class FeatureFlagController {
       parsed.data.environment,
       parsed.data.projectId,
     );
+  }
+
+  @AllowAnonymous()
+  @HttpCode(HttpStatus.OK)
+  @Post(':name/evaluate')
+  async evaluate(
+    @Param('name') name: string,
+    @Body() body: unknown,
+  ): Promise<{ enabled: boolean }> {
+    const parsed = EvaluateFeatureFlagSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.issues);
+    }
+
+    return {
+      enabled: await this.featureFlagService.isEnabled(
+        name,
+        parsed.data.environment,
+        parsed.data.projectId,
+        parsed.data.attributes,
+      ),
+    };
   }
 
   @AllowAnonymous()

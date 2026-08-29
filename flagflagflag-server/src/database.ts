@@ -43,6 +43,10 @@ const percentageMigrationUrl = new URL(
   '../migrations/2026-08-29T05-34-40.652Z-feature-flag-percentage.sql',
   import.meta.url,
 );
+const targetingRulesMigrationUrl = new URL(
+  '../migrations/2026-08-29T07-00-00.000Z-feature-flag-targeting-rules.sql',
+  import.meta.url,
+);
 const migrationUrls = [
   new URL(
     '../migrations/2026-08-29T06-15-30.000Z-app-user.sql',
@@ -57,6 +61,7 @@ const migrationUrls = [
     import.meta.url,
   ),
   percentageMigrationUrl,
+  targetingRulesMigrationUrl,
 ];
 
 let initializationPromise: Promise<void> | undefined;

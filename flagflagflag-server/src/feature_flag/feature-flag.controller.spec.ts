@@ -64,12 +64,7 @@ describe('FeatureFlagController', () => {
   });
 
   it('isolates flag state by environment', async () => {
-    await service.setEnabled(
-      'new-checkout',
-      true,
-      'staging',
-      'default',
-    );
+    await service.setEnabled('new-checkout', true, 'staging', 'default');
 
     await expect(
       controller.get('new-checkout', {
@@ -99,6 +94,62 @@ describe('FeatureFlagController', () => {
       environment: 'development',
       enabled: false,
       percentage: 100,
+      rules: [],
+    });
+  });
+
+  it('evaluates targeting rules against caller attributes', async () => {
+    const rules = [
+      { attribute: 'plan', operator: 'equals', value: 'pro' as const },
+      { attribute: 'age', operator: 'greaterThan', value: 18 },
+    ];
+    await controller.create({
+      name: 'targeted-checkout',
+      enabled: true,
+      projectId: 'default',
+      environment: 'development',
+      rules,
+    });
+
+    await expect(
+      controller.evaluate('targeted-checkout', {
+        projectId: 'default',
+        environment: 'development',
+        attributes: { plan: 'pro', age: 21 },
+      }),
+    ).resolves.toEqual({ enabled: true });
+    await expect(
+      controller.evaluate('targeted-checkout', {
+        projectId: 'default',
+        environment: 'development',
+        attributes: { plan: 'free', age: 21 },
+      }),
+    ).resolves.toEqual({ enabled: false });
+    await expect(
+      controller.evaluate('targeted-checkout', {
+        projectId: 'default',
+        environment: 'development',
+        attributes: { plan: 'pro' },
+      }),
+    ).resolves.toEqual({ enabled: false });
+  });
+
+  it('replaces targeting rules when updating a flag', async () => {
+    const context = { projectId: 'default', environment: 'development' };
+    await controller.create({
+      ...context,
+      name: 'mutable-target',
+      enabled: true,
+      rules: [{ attribute: 'plan', operator: 'equals', value: 'pro' }],
+    });
+
+    await expect(
+      controller.update('mutable-target', context, {
+        enabled: true,
+        rules: [{ attribute: 'country', operator: 'in', value: ['DE'] }],
+      }),
+    ).resolves.toMatchObject({
+      rules: [{ attribute: 'country', operator: 'in', value: ['DE'] }],
     });
   });
   it('evaluates enabled flags according to their rollout percentage', async () => {
@@ -133,7 +184,6 @@ describe('FeatureFlagController', () => {
     }
   });
 
-
   it('allows the same flag name in separate environments', async () => {
     await controller.create({
       name: 'new-nav',
@@ -154,6 +204,7 @@ describe('FeatureFlagController', () => {
       environment: 'production',
       enabled: true,
       percentage: 100,
+      rules: [],
     });
   });
 
@@ -171,6 +222,7 @@ describe('FeatureFlagController', () => {
       environment: 'qa',
       enabled: true,
       percentage: 100,
+      rules: [],
     });
   });
 
@@ -190,7 +242,9 @@ describe('FeatureFlagController', () => {
       enabled: true,
     });
 
-    await expect(controller.remove('lifecycle', context)).resolves.toBeUndefined();
+    await expect(
+      controller.remove('lifecycle', context),
+    ).resolves.toBeUndefined();
     await expect(controller.list(context)).resolves.toEqual([]);
   });
 
@@ -211,11 +265,8 @@ describe('FeatureFlagController', () => {
     ).rejects.toThrow();
   });
 
-
   it('requires project and environment context', async () => {
-    await expect(
-      controller.get('new-nav', {}),
-    ).rejects.toThrow();
+    await expect(controller.get('new-nav', {})).rejects.toThrow();
     await expect(
       controller.create({ name: 'new-nav', enabled: true }),
     ).rejects.toThrow();

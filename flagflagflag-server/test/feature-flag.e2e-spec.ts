@@ -44,6 +44,7 @@ describe('Feature flags (e2e)', () => {
         environment: 'staging',
         enabled: true,
         percentage: 100,
+        rules: [],
       });
 
     await request(app.getHttpServer())
@@ -57,10 +58,54 @@ describe('Feature flags (e2e)', () => {
       .expect(200)
       .expect({ enabled: true });
   });
+
+  it('evaluates targeting rules through the anonymous evaluation endpoint', async () => {
+    const { client, projectId } =
+      await createProjectWithEnvironments('development');
+    const name = `targeted-checkout-${Date.now()}`;
+
+    await client
+      .post('/feature-flags')
+      .send({
+        name,
+        enabled: true,
+        projectId,
+        environment: 'development',
+        rules: [
+          { attribute: 'plan', operator: 'equals', value: 'pro' },
+          { attribute: 'age', operator: 'greaterThan', value: 18 },
+        ],
+      })
+      .expect(201)
+      .expect((response) => {
+        expect(response.body.rules).toEqual([
+          { attribute: 'plan', operator: 'equals', value: 'pro' },
+          { attribute: 'age', operator: 'greaterThan', value: 18 },
+        ]);
+      });
+
+    await request(app.getHttpServer())
+      .post(`/feature-flags/${name}/evaluate`)
+      .send({
+        projectId,
+        environment: 'development',
+        attributes: { plan: 'pro', age: 21 },
+      })
+      .expect(200)
+      .expect({ enabled: true });
+    await request(app.getHttpServer())
+      .post(`/feature-flags/${name}/evaluate`)
+      .send({
+        projectId,
+        environment: 'development',
+        attributes: { plan: 'free', age: 21 },
+      })
+      .expect(200)
+      .expect({ enabled: false });
+  });
   it('stores and evaluates percentage rollouts', async () => {
-    const { client, projectId } = await createProjectWithEnvironments(
-      'development',
-    );
+    const { client, projectId } =
+      await createProjectWithEnvironments('development');
     const name = `gradual-checkout-${Date.now()}`;
 
     await client
@@ -79,6 +124,7 @@ describe('Feature flags (e2e)', () => {
         environment: 'development',
         enabled: true,
         percentage: 0,
+        rules: [],
       });
 
     await request(app.getHttpServer())
@@ -100,6 +146,7 @@ describe('Feature flags (e2e)', () => {
         environment: 'development',
         enabled: true,
         percentage: 100,
+        rules: [],
       });
 
     await request(app.getHttpServer())
@@ -109,7 +156,6 @@ describe('Feature flags (e2e)', () => {
       .expect(200)
       .expect({ enabled: true });
   });
-
 
   it('supports flags in custom project environments', async () => {
     const client = await signIn();
@@ -140,6 +186,7 @@ describe('Feature flags (e2e)', () => {
         environment: 'qa',
         enabled: true,
         percentage: 100,
+        rules: [],
       });
 
     await request(app.getHttpServer())
@@ -173,6 +220,7 @@ describe('Feature flags (e2e)', () => {
         environment: 'quality-assurance',
         enabled: false,
         percentage: 100,
+        rules: [],
       });
     await request(app.getHttpServer())
       .get(
@@ -186,9 +234,7 @@ describe('Feature flags (e2e)', () => {
       )
       .expect(204);
     await client
-      .delete(
-        `/projects/${projectId}/environments/${environment.body.id}`,
-      )
+      .delete(`/projects/${projectId}/environments/${environment.body.id}`)
       .expect(204);
     await client.delete(`/projects/${projectId}`).expect(204);
   });

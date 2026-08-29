@@ -1,11 +1,6 @@
-import {
-  Column,
-  Entity,
-  JoinColumn,
-  ManyToOne,
-  PrimaryColumn,
-} from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
 import { EnvironmentEntity } from '../environment/environment.entity.js';
+import type { TargetingRule } from './schemas.js';
 
 @Entity({ name: 'feature_flag' })
 export class FeatureFlagEntity {
@@ -23,4 +18,6 @@ export class FeatureFlagEntity {
   enabled!: boolean;
   @Column({ type: 'integer', default: 100 })
   percentage!: number;
+  @Column({ type: 'simple-json', default: '[]' })
+  rules!: TargetingRule[];
 }

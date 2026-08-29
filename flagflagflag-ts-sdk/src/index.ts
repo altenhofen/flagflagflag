@@ -1,4 +1,5 @@
 export type FeatureFlagEnvironment = string;
+export type EvaluationAttributes = Record<string, string | number | boolean>;
 
 export interface FlagClientOptions {
   baseUrl: string;
@@ -6,7 +7,6 @@ export interface FlagClientOptions {
   projectId: string;
   environment: FeatureFlagEnvironment;
 }
-
 
 interface FlagResponse {
   enabled: boolean;
@@ -25,19 +25,36 @@ export class FlagClient {
     this.environment = options.environment;
   }
 
-  async isEnabled(name: string): Promise<boolean> {
+  async isEnabled(
+    name: string,
+    attributes?: EvaluationAttributes,
+  ): Promise<boolean> {
     if (!name) {
       return false;
     }
 
     try {
+      const hasAttributes = attributes !== undefined;
       const response = await fetch(
-        `${this.baseUrl}/feature-flags/${encodeURIComponent(name)}?projectId=${encodeURIComponent(this.projectId)}&environment=${encodeURIComponent(this.environment)}`,
+        hasAttributes
+          ? `${this.baseUrl}/feature-flags/${encodeURIComponent(name)}/evaluate`
+          : `${this.baseUrl}/feature-flags/${encodeURIComponent(name)}?projectId=${encodeURIComponent(this.projectId)}&environment=${encodeURIComponent(this.environment)}`,
         {
+          method: hasAttributes ? 'POST' : 'GET',
           headers: {
             Accept: 'application/json',
+            'Content-Type': 'application/json',
             'X-API-Key': this.apiKey,
           },
+          ...(hasAttributes
+            ? {
+                body: JSON.stringify({
+                  projectId: this.projectId,
+                  environment: this.environment,
+                  attributes,
+                }),
+              }
+            : {}),
         },
       );
 
