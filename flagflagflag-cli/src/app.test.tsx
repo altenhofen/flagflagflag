@@ -20,6 +20,7 @@ const createApi = (): FlagApi => ({
     projectId: 'project-1',
     environment: 'development',
     enabled: false,
+    percentage: 100,
   })),
   deleteFlag: vi.fn(async () => undefined),
   createProject: vi.fn(async () => ({ id: 'project-1', name: 'Demo' })),
@@ -33,6 +34,7 @@ const createApi = (): FlagApi => ({
     projectId: 'project-1',
     environment: 'development',
     enabled: false,
+    percentage: 100,
   })),
   isEnabled: vi.fn(async () => false),
 });
@@ -124,6 +126,7 @@ describe('flagflagflag wizard', () => {
       true,
       'project-1',
       'staging',
+      100,
     );
     expect(instance.lastFrame()).toContain('Project ready');
     instance.unmount();

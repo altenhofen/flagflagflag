@@ -28,6 +28,10 @@ export const featureFlagDataSource = isPostgres
       synchronize: false,
     });
 
+const percentageMigrationUrl = new URL(
+  '../migrations/2026-08-29T05-34-40.652Z-feature-flag-percentage.sql',
+  import.meta.url,
+);
 const migrationUrls = [
   new URL('../migrations/2026-08-29T05-34-40.649Z.sql', import.meta.url),
   new URL('../migrations/2026-08-29T05-34-40.650Z-feature-flags.sql', import.meta.url),
@@ -35,6 +39,7 @@ const migrationUrls = [
     '../migrations/2026-08-29T05-34-40.651Z-project-environments.sql',
     import.meta.url,
   ),
+  percentageMigrationUrl,
 ];
 
 let initializationPromise: Promise<void> | undefined;

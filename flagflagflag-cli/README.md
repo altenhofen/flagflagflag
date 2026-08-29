@@ -89,8 +89,14 @@ flagflagflag wizard [connection options]
 flagflagflag is-enabled <name> --project-id <id> --environment <name>
 flagflagflag project create <name>
 flagflagflag environment create <project-id> <name>
-flagflagflag flag create <name> --project-id <id> --environment <name> [--enabled]
+flagflagflag flag create <name> [<percentage>%] [ON|OFF] --project-id <id> --environment <name>
+flagflagflag flag <name> <percentage>% <ON|OFF> --project-id <id> --environment <name>
 ```
+
+For example, `flagflagflag flag new-feature 10% ON --project-id p1
+--environment staging` enables `new-feature` for an approximately 10% random
+sample of evaluations. `OFF` always disables the flag; `ON` with no percentage
+uses 100%. Percentage values must be whole numbers from 0 through 100.
 
 The direct commands are intentionally small. Full list, update, and delete
 workflows live in the TUI so the selected project and environment remain visible
@@ -134,8 +140,9 @@ The client supports CRUD operations for:
 
 - projects: list, create, update, delete;
 - environments: list, create, update, delete;
-- flags: list, create, update, delete;
-- flag evaluation through `isEnabled`.
+- flags: list, create, update, delete, with a 0–100 percentage rollout;
+- flag evaluation through `isEnabled`. Enabled percentage flags are sampled
+  independently on each evaluation.
 
 The server currently exposes these resource routes:
 

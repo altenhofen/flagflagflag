@@ -232,6 +232,7 @@ export function Dashboard({ api, onExit }: DashboardProps) {
         !selectedFlag.enabled,
         selectedProject.id,
         selectedEnvironment.name,
+        selectedFlag.percentage,
       );
       await refresh();
     } catch (cause) {
@@ -287,6 +288,7 @@ export function Dashboard({ api, onExit }: DashboardProps) {
           enabled,
           selectedProject.id,
           selectedEnvironment.name,
+          100,
         );
       }
       setForm(undefined);
@@ -390,9 +392,16 @@ function RecordList({ section, projects, environments, flags, projectIndex, envi
     return <Text color="gray">No {section} yet. Press n to create one.</Text>;
   }
   return records.map((record, index) => {
-    const selected = section === 'projects' ? index === projectIndex : section === 'environments' ? index === environmentIndex : index === flagIndex;
+    const selected =
+      section === 'projects'
+        ? index === projectIndex
+        : section === 'environments'
+          ? index === environmentIndex
+          : index === flagIndex;
+    const state = 'enabled' in record
+      ? `${record.enabled ? 'ON' : 'OFF'} ${record.percentage}%`
+      : '';
     const label = 'name' in record ? record.name : '';
-    const state = 'enabled' in record ? record.enabled ? 'ON' : 'OFF' : '';
     return <Text key={`${label}-${index}`} color={selected ? 'redBright' : 'white'}>{selected ? '› ' : '  '}{label.padEnd(28)} {state}</Text>;
   });
 }

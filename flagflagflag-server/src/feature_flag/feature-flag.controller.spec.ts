@@ -1,5 +1,6 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { describe, expect, it, vi } from 'vitest';
 import { DataSource } from 'typeorm';
+import { Test, TestingModule } from '@nestjs/testing';
 import { EnvironmentEntity } from '../environment/environment.entity.js';
 import { FeatureFlagController } from './feature-flag.controller.js';
 import { FeatureFlagEntity } from './feature-flag.entity.js';
@@ -97,8 +98,41 @@ describe('FeatureFlagController', () => {
       projectId: 'default',
       environment: 'development',
       enabled: false,
+      percentage: 100,
     });
   });
+  it('evaluates enabled flags according to their rollout percentage', async () => {
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.09);
+    try {
+      await expect(
+        controller.create({
+          name: 'gradual-checkout',
+          enabled: true,
+          percentage: 10,
+          projectId: 'default',
+          environment: 'development',
+        }),
+      ).resolves.toMatchObject({ percentage: 10, enabled: true });
+
+      await expect(
+        controller.get('gradual-checkout', {
+          projectId: 'default',
+          environment: 'development',
+        }),
+      ).resolves.toEqual({ enabled: true });
+
+      random.mockReturnValue(0.1);
+      await expect(
+        controller.get('gradual-checkout', {
+          projectId: 'default',
+          environment: 'development',
+        }),
+      ).resolves.toEqual({ enabled: false });
+    } finally {
+      random.mockRestore();
+    }
+  });
+
 
   it('allows the same flag name in separate environments', async () => {
     await controller.create({
@@ -119,6 +153,7 @@ describe('FeatureFlagController', () => {
       projectId: 'default',
       environment: 'production',
       enabled: true,
+      percentage: 100,
     });
   });
 
@@ -135,6 +170,7 @@ describe('FeatureFlagController', () => {
       projectId: 'default',
       environment: 'qa',
       enabled: true,
+      percentage: 100,
     });
   });
 
@@ -163,6 +199,18 @@ describe('FeatureFlagController', () => {
       controller.create({ name: '', enabled: true }),
     ).rejects.toThrow();
   });
+  it('rejects rollout percentages outside the 0 to 100 range', async () => {
+    await expect(
+      controller.create({
+        name: 'invalid-rollout',
+        enabled: true,
+        percentage: 101,
+        projectId: 'default',
+        environment: 'development',
+      }),
+    ).rejects.toThrow();
+  });
+
 
   it('requires project and environment context', async () => {
     await expect(

@@ -17,6 +17,7 @@ export interface FeatureFlag {
   projectId: string;
   environment: string;
   enabled: boolean;
+  percentage: number;
 }
 
 @Injectable()
@@ -45,7 +46,10 @@ export class FeatureFlagService {
       name,
       environmentId: environment.id,
     });
-    return flag?.enabled ?? false;
+    return (
+      flag?.enabled === true &&
+      (flag.percentage >= 100 || Math.random() * 100 < flag.percentage)
+    );
   }
   async list(
     environmentName: string,
@@ -56,11 +60,12 @@ export class FeatureFlagService {
       where: { environmentId: environment.id },
       order: { name: 'ASC' },
     });
-    return flags.map(({ name, enabled }) => ({
+    return flags.map(({ name, enabled, percentage }) => ({
       name,
       projectId,
       environment: environment.name,
       enabled,
+      percentage,
     }));
   }
 
@@ -69,6 +74,7 @@ export class FeatureFlagService {
     enabled: boolean,
     environmentName: string,
     projectId: string,
+    percentage: number,
   ): Promise<FeatureFlag> {
     const environment = await this.getEnvironment(projectId, environmentName);
 
@@ -78,6 +84,7 @@ export class FeatureFlagService {
           name,
           environmentId: environment.id,
           enabled,
+          percentage,
         }),
       );
     } catch (error) {
@@ -104,6 +111,7 @@ export class FeatureFlagService {
       projectId,
       environment: environment.name,
       enabled,
+      percentage,
     };
   }
   async update(
@@ -111,6 +119,7 @@ export class FeatureFlagService {
     enabled: boolean,
     environmentName: string,
     projectId: string,
+    percentage: number | undefined,
   ): Promise<FeatureFlag> {
     const environment = await this.getEnvironment(projectId, environmentName);
     const flag = await this.repository.findOneBy({
@@ -121,8 +130,17 @@ export class FeatureFlagService {
       throw new NotFoundException('Feature flag not found');
     }
     flag.enabled = enabled;
+    if (percentage !== undefined) {
+      flag.percentage = percentage;
+    }
     await this.repository.save(flag);
-    return { name, projectId, environment: environment.name, enabled };
+    return {
+      name,
+      projectId,
+      environment: environment.name,
+      enabled,
+      percentage: flag.percentage,
+    };
   }
 
   async remove(
@@ -146,10 +164,11 @@ export class FeatureFlagService {
     enabled: boolean,
     environmentName: string,
     projectId: string,
+    percentage = 100,
   ): Promise<void> {
     const environment = await this.getEnvironment(projectId, environmentName);
     await this.repository.upsert(
-      { name, environmentId: environment.id, enabled },
+      { name, environmentId: environment.id, enabled, percentage },
       ['name', 'environmentId'],
     );
   }

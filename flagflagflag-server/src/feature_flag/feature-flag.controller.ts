@@ -48,6 +48,7 @@ export class FeatureFlagController {
       parsed.data.enabled,
       parsed.data.environment,
       parsed.data.projectId,
+      parsed.data.percentage,
     );
   }
 
@@ -71,6 +72,7 @@ export class FeatureFlagController {
       update.data.enabled,
       context.data.environment,
       context.data.projectId,
+      update.data.percentage,
     );
   }
 

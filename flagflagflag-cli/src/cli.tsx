@@ -20,7 +20,8 @@ const help = `flagflagflag commands:
   flagflagflag is-enabled <name> --project-id <id> --environment <name>
   flagflagflag project create <name>
   flagflagflag environment create <project-id> <name>
-  flagflagflag flag create <name> --project-id <id> --environment <name> [--enabled]
+  flagflagflag flag create <name> [<percentage>%] [ON|OFF] --project-id <id> --environment <name>
+  flagflagflag flag <name> <percentage>% <ON|OFF> --project-id <id> --environment <name>
 
 connection options:
   --host <hostname>       API hostname (default: localhost)
@@ -69,8 +70,11 @@ export async function runCli(
       dependencies.write(`${environment.id} ${environment.name}\\n`);
       return 0;
     }
-    if (argv[0] === 'flag' && argv[1] === 'create') {
-      return await createFlag(argv.slice(2), api, dependencies.write);
+    if (argv[0] === 'flag') {
+      if (argv[1] === 'create') {
+        return await createFlag(argv.slice(2), api, dependencies.write);
+      }
+      return await createFlag(argv.slice(1), api, dependencies.write);
     }
   } catch (cause) {
     dependencies.write(`${cause instanceof Error ? cause.message : 'Request failed'}\\n`);
@@ -109,19 +113,44 @@ async function createFlag(
   const name = argv[0];
   const projectId = getOption(argv, '--project-id');
   const environment = getOption(argv, '--environment');
-  if (!name || !projectId || !environment) {
-    write('Usage: flagflagflag flag create <name> --project-id <id> --environment <name> [--enabled]\\n');
+  const percentageToken =
+    argv.find((value) => /^\d+%$/.test(value)) ??
+    getOption(argv, '--percentage');
+  const percentage = parsePercentage(percentageToken);
+  const state = argv.find((value) => /^(ON|OFF)$/i.test(value));
+  if (
+    !name ||
+    !projectId ||
+    !environment ||
+    percentage === undefined ||
+    (state === undefined && percentageToken !== undefined)
+  ) {
+    write(
+      'Usage: flagflagflag flag <name> <percentage>% <ON|OFF> --project-id <id> --environment <name>\\n',
+    );
     return 1;
   }
 
+  const enabled = state ? state.toUpperCase() === 'ON' : argv.includes('--enabled');
   const flag = await api.createFlag(
     name,
-    argv.includes('--enabled'),
+    enabled,
     projectId,
     environment,
+    percentage ?? 100,
   );
-  write(`${flag.name} ${flag.enabled ? 'enabled' : 'disabled'}\\n`);
+  write(`${flag.name} ${percentage ?? 100}% ${enabled ? 'ON' : 'OFF'}\\n`);
   return 0;
+}
+
+function parsePercentage(value: string | undefined): number | undefined {
+  if (value === undefined) {
+    return 100;
+  }
+  const numeric = Number(value.endsWith('%') ? value.slice(0, -1) : value);
+  return Number.isInteger(numeric) && numeric >= 0 && numeric <= 100
+    ? numeric
+    : undefined;
 }
 
 function getOption(argv: string[], name: string): string | undefined {

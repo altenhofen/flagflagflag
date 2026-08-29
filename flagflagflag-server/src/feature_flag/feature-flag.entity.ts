@@ -21,4 +21,6 @@ export class FeatureFlagEntity {
 
   @Column({ type: 'boolean', default: false })
   enabled!: boolean;
+  @Column({ type: 'integer', default: 100 })
+  percentage!: number;
 }

@@ -43,6 +43,7 @@ describe('Feature flags (e2e)', () => {
         projectId,
         environment: 'staging',
         enabled: true,
+        percentage: 100,
       });
 
     await request(app.getHttpServer())
@@ -56,6 +57,59 @@ describe('Feature flags (e2e)', () => {
       .expect(200)
       .expect({ enabled: true });
   });
+  it('stores and evaluates percentage rollouts', async () => {
+    const { client, projectId } = await createProjectWithEnvironments(
+      'development',
+    );
+    const name = `gradual-checkout-${Date.now()}`;
+
+    await client
+      .post('/feature-flags')
+      .send({
+        name,
+        enabled: true,
+        percentage: 0,
+        projectId,
+        environment: 'development',
+      })
+      .expect(201)
+      .expect({
+        name,
+        projectId,
+        environment: 'development',
+        enabled: true,
+        percentage: 0,
+      });
+
+    await request(app.getHttpServer())
+      .get(
+        `/feature-flags/${name}?projectId=${projectId}&environment=development`,
+      )
+      .expect(200)
+      .expect({ enabled: false });
+
+    await client
+      .patch(
+        `/feature-flags/${name}?projectId=${projectId}&environment=development`,
+      )
+      .send({ enabled: true, percentage: 100 })
+      .expect(200)
+      .expect({
+        name,
+        projectId,
+        environment: 'development',
+        enabled: true,
+        percentage: 100,
+      });
+
+    await request(app.getHttpServer())
+      .get(
+        `/feature-flags/${name}?projectId=${projectId}&environment=development`,
+      )
+      .expect(200)
+      .expect({ enabled: true });
+  });
+
 
   it('supports flags in custom project environments', async () => {
     const client = await signIn();
@@ -85,6 +139,7 @@ describe('Feature flags (e2e)', () => {
         projectId,
         environment: 'qa',
         enabled: true,
+        percentage: 100,
       });
 
     await request(app.getHttpServer())
@@ -117,6 +172,7 @@ describe('Feature flags (e2e)', () => {
         projectId,
         environment: 'quality-assurance',
         enabled: false,
+        percentage: 100,
       });
     await request(app.getHttpServer())
       .get(

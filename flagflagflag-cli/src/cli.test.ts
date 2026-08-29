@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { runCli } from './cli.js';
 import type { FlagApi } from './api-client.js';
 
@@ -25,12 +25,14 @@ const api: FlagApi = {
     projectId: 'p1',
     environment: 'staging',
     enabled: true,
+    percentage: 100,
   }),
   updateFlag: async () => ({
     name: 'checkout',
     projectId: 'p1',
     environment: 'staging',
     enabled: true,
+    percentage: 100,
   }),
   deleteFlag: async () => undefined,
   isEnabled: async () => true,
@@ -62,6 +64,37 @@ describe('flagflagflag CLI', () => {
 
     expect(exitCode).toBe(0);
     expect(output.join('')).toContain('enabled');
+  });
+  it('creates a percentage rollout with ON state from the compact syntax', async () => {
+    const output: string[] = [];
+    const createFlag = vi.fn(api.createFlag);
+
+    const exitCode = await runCli(
+      [
+        'flag',
+        'new-feature',
+        '10%',
+        'ON',
+        '--project-id',
+        'p1',
+        '--environment',
+        'staging',
+      ],
+      {
+        api: { ...api, createFlag },
+        write: (message) => output.push(message),
+      },
+    );
+
+    expect(exitCode).toBe(0);
+    expect(createFlag).toHaveBeenCalledWith(
+      'new-feature',
+      true,
+      'p1',
+      'staging',
+      10,
+    );
+    expect(output.join('')).toContain('checkout 10% ON');
   });
 
   it('creates a project through the project command', async () => {

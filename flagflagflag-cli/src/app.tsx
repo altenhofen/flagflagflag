@@ -101,6 +101,7 @@ export function App({ api, onComplete }: AppProps) {
         value.trim().toLowerCase() === 'y' || value.trim().toLowerCase() === 'yes',
         projectId,
         environmentName,
+        100,
       );
       setStep('done');
       onComplete?.();

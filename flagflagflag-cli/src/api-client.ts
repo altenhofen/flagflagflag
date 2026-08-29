@@ -16,6 +16,7 @@ export interface FeatureFlag {
   projectId: string;
   environment: string;
   enabled: boolean;
+  percentage: number;
 }
 
 export interface FlagApi {
@@ -37,12 +38,14 @@ export interface FlagApi {
     enabled: boolean,
     projectId: string,
     environment: string,
+    percentage: number,
   ): Promise<FeatureFlag>;
   updateFlag(
     name: string,
     enabled: boolean,
     projectId: string,
     environment: string,
+    percentage: number,
   ): Promise<FeatureFlag>;
   deleteFlag(
     name: string,
@@ -149,10 +152,17 @@ export class FlagApiClient implements FlagApi {
     enabled: boolean,
     projectId: string,
     environment: string,
+    percentage: number,
   ): Promise<FeatureFlag> {
     return this.request('/feature-flags', {
       method: 'POST',
-      body: JSON.stringify({ name, enabled, projectId, environment }),
+      body: JSON.stringify({
+        name,
+        enabled,
+        percentage,
+        projectId,
+        environment,
+      }),
     });
   }
 
@@ -161,12 +171,13 @@ export class FlagApiClient implements FlagApi {
     enabled: boolean,
     projectId: string,
     environment: string,
+    percentage: number,
   ): Promise<FeatureFlag> {
     return this.request(
       `/feature-flags/${encodeURIComponent(name)}?projectId=${encodeURIComponent(projectId)}&environment=${encodeURIComponent(environment)}`,
       {
         method: 'PATCH',
-        body: JSON.stringify({ enabled }),
+        body: JSON.stringify({ enabled, percentage }),
       },
     );
   }

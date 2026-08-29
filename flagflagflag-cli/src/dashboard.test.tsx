@@ -18,12 +18,14 @@ const api: FlagApi = {
     projectId: 'p1',
     environment: 'staging',
     enabled: true,
+    percentage: 100,
   }),
   updateFlag: async () => ({
     name: 'checkout',
     projectId: 'p1',
     environment: 'staging',
     enabled: true,
+    percentage: 100,
   }),
   deleteFlag: async () => undefined,
   isEnabled: async () => false,
@@ -65,7 +67,6 @@ describe('Ember CRUD dashboard', () => {
     expect(instance.lastFrame()).toContain('Payments');
     instance.unmount();
   });
-
   it('toggles the selected feature flag with e', async () => {
     let enabled = false;
     const updateFlag = vi.fn(
@@ -76,7 +77,7 @@ describe('Ember CRUD dashboard', () => {
         environment: string,
       ) => {
         enabled = nextEnabled;
-        return { name, projectId, environment, enabled };
+        return { name, projectId, environment, enabled, percentage: 100 };
       },
     );
     const dashboardApi: FlagApi = {
@@ -91,6 +92,7 @@ describe('Ember CRUD dashboard', () => {
           projectId: 'p1',
           environment: 'staging',
           enabled,
+          percentage: 100,
         },
       ],
       updateFlag,
@@ -110,6 +112,7 @@ describe('Ember CRUD dashboard', () => {
       true,
       'p1',
       'staging',
+      100,
     );
     expect(instance.lastFrame()).toContain('checkout');
     expect(instance.lastFrame()).toContain('ON');
