@@ -45,7 +45,7 @@ export class SdkService {
       key: flag.name,
       enabled: flag.enabled,
       defaultValue: flag.percentage >= 100,
-      ...(flag.percentage < 100 ? { rolloutPercentage: flag.percentage } : {}),
+      rollout: flag.percentage < 100 ? { percentage: flag.percentage, attribute: 'userId' } : null,
       rules: flag.rules.map((rule, index): TargetingRuleConfig => ({
         id: `${flag.name}-${index + 1}`,
         priority: index + 1,
@@ -59,25 +59,34 @@ export class SdkService {
     }]));
     const fingerprint = JSON.stringify(flags);
     const record = await this.versions.findOneBy({ environmentId: environment.id });
-    const version = record?.fingerprint === fingerprint ? record.version : (record?.version ?? 0) + 1;
+    const configVersion = record?.fingerprint === fingerprint ? record.version : (record?.version ?? 0) + 1;
     if (!record || record.fingerprint !== fingerprint) {
-      await this.versions.save({ environmentId: environment.id, fingerprint, version });
+      await this.versions.save({ environmentId: environment.id, fingerprint, version: configVersion });
     }
-    return { version, environment: environment.name, flags };
+    return {
+      schemaVersion: 1,
+      configVersion,
+      environment: { id: environment.id, key: environment.name },
+      flags,
+    };
   }
 }
 
 function normalizeOperator(operator: string): TargetingOperator {
   const names: Record<string, TargetingOperator> = {
     equals: 'equals',
-    notEquals: 'not_equals',
+    notEquals: 'notEquals',
     in: 'in',
-    notIn: 'not_in',
+    notIn: 'notIn',
     contains: 'contains',
-    greaterThan: 'greater_than',
-    lessThan: 'less_than',
+    greaterThan: 'greaterThan',
+    greaterThanOrEqual: 'greaterThanOrEqual',
+    lessThan: 'lessThan',
+    lessThanOrEqual: 'lessThanOrEqual',
   };
-  return names[operator] ?? 'equals';
+  const normalized = names[operator];
+  if (!normalized) throw new Error(`Unsupported targeting operator: ${operator}`);
+  return normalized;
 }
 
  

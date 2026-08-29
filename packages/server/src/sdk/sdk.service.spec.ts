@@ -23,8 +23,13 @@ describe('SdkService', () => {
     const environment = { id: 'production-id', name: 'production', projectId: 'project' };
     const first = await service.config(environment);
     const second = await service.config(environment);
-    expect(first).toEqual({ version: 1, environment: 'production', flags: { checkout: { key: 'checkout', enabled: true, defaultValue: true, rules: [] } } });
-    expect(second.version).toBe(1);
+    expect(first).toEqual({
+      schemaVersion: 1,
+      configVersion: 1,
+      environment: { id: 'production-id', key: 'production' },
+      flags: { checkout: { key: 'checkout', enabled: true, defaultValue: true, rollout: null, rules: [] } },
+    });
+    expect(second.configVersion).toBe(1);
     expect(versions.save).toHaveBeenCalledTimes(1);
   });
 });

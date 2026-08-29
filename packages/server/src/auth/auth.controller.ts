@@ -19,7 +19,7 @@ import { AuthService } from './auth.service.js';
 import { SESSION_COOKIE, SESSION_TTL_MS } from './tokens.js';
 import { ChangePasswordSchema, SignInSchema, SignUpSchema } from './schemas.js';
 
-@Controller('api/auth')
+@Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,

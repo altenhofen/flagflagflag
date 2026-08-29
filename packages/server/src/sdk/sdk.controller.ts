@@ -11,15 +11,15 @@ export class SdkKeyGuard implements CanActivate {
   constructor(private readonly sdk: SdkService) {}
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<SdkRequest>();
-    const [scheme, token] = request.headers.authorization?.split(' ') ?? [];
-    if (scheme !== 'Bearer' || !token) throw new UnauthorizedException('SDK key required');
+    const token = request.headers['x-sdk-key'];
+    if (typeof token !== 'string' || !token) throw new UnauthorizedException('SDK key required');
     request.sdkEnvironment = await this.sdk.authenticate(token);
     return true;
   }
 }
 
 @AllowAnonymous()
-@Controller('sdk/v1')
+@Controller('sdk')
 @UseGuards(SdkKeyGuard)
 export class SdkController {
   constructor(private readonly sdk: SdkService) {}
@@ -27,8 +27,9 @@ export class SdkController {
   @Get('config')
   async config(@Req() request: SdkRequest, @Res() response: Response): Promise<void> {
     const config = await this.sdk.config(request.sdkEnvironment!);
-    const etag = `"${config.version}"`;
+    const etag = `"${config.configVersion}"`;
     response.setHeader('ETag', etag);
+    response.setHeader('Cache-Control', 'private, max-age=30');
     if (request.headers['if-none-match'] === etag) {
       response.status(304).send();
       return;

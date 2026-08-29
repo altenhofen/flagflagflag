@@ -25,16 +25,14 @@ export class FlagsClient {
 
   constructor(options: FlagsClientOptions) {
     this.sdkKey = options.sdkKey;
-    this.url = `${options.baseUrl.replace(/\/$/, '')}/sdk/v1/config`;
+    this.url = `${options.baseUrl.replace(/\/$/, '')}/api/v1/sdk/config`;
     this.intervalMs = options.refreshIntervalMs ?? 30000;
     this.request = options.fetch ?? globalThis.fetch;
   }
 
   async initialize(): Promise<void> {
     await this.refresh();
-    if (!this.timer) {
-      this.timer = setInterval(() => void this.refresh(), this.intervalMs);
-    }
+    if (!this.timer) this.timer = setInterval(() => void this.refresh(), this.intervalMs);
   }
 
   async refresh(): Promise<boolean> {
@@ -47,9 +45,9 @@ export class FlagsClient {
 
   evaluate(flagKey: string, context: EvaluationContext, fallback = false): EvaluationResult {
     if (!this.config) return { value: fallback, reason: 'NO_CONFIG' };
-    const flag: FlagConfig | undefined = this.config.flags[flagKey];
+    const flag = this.config.flags[flagKey];
     if (!flag) return { value: fallback, reason: 'FLAG_NOT_FOUND' };
-    return evaluateFlag(flag, context);
+    return evaluateFlag(flag, context, this.config.environment.id);
   }
 
   isEnabled(flagKey: string, context: EvaluationContext, fallback = false): boolean {
@@ -66,7 +64,7 @@ export class FlagsClient {
       const response = await this.request(this.url, {
         headers: {
           Accept: 'application/json',
-          Authorization: `Bearer ${this.sdkKey}`,
+          'X-SDK-Key': this.sdkKey,
           ...(this.etag ? { 'If-None-Match': this.etag } : {}),
         },
       });
@@ -75,7 +73,7 @@ export class FlagsClient {
       const candidate: unknown = await response.json();
       if (!isSdkConfig(candidate)) return false;
       this.config = candidate;
-      this.etag = response.headers.get('etag') ?? `"${candidate.version}"`;
+      this.etag = response.headers.get('etag') ?? `"${this.config.configVersion}"`;
       return true;
     } catch {
       return false;
@@ -86,9 +84,11 @@ export class FlagsClient {
 function isSdkConfig(value: unknown): value is SdkConfig {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<SdkConfig>;
-  const version = candidate.version;
-  return typeof version === 'number' && Number.isInteger(version) && version >= 0 &&
-    typeof candidate.environment === 'string' && isFlags(candidate.flags);
+  const configVersion = candidate.configVersion;
+  const environment = candidate.environment;
+  return candidate.schemaVersion === 1 && typeof configVersion === 'number' && Number.isInteger(configVersion) && configVersion >= 0 &&
+    !!environment && typeof environment.id === 'string' && typeof environment.key === 'string' &&
+    isFlags(candidate.flags);
 }
 
 function isFlags(value: unknown): value is Record<string, FlagConfig> {
@@ -100,9 +100,26 @@ function isFlag(value: unknown): value is FlagConfig {
   if (!value || typeof value !== 'object') return false;
   const flag = value as Partial<FlagConfig>;
   return typeof flag.key === 'string' && typeof flag.enabled === 'boolean' &&
-    typeof flag.defaultValue === 'boolean' && Array.isArray(flag.rules) &&
-    flag.rules.every((rule) => rule && typeof rule === 'object' && typeof rule.id === 'string' &&
-      Number.isFinite(rule.priority) && typeof rule.result === 'boolean' && Array.isArray(rule.conditions));
+    typeof flag.defaultValue === 'boolean' && (flag.rollout === null || isRollout(flag.rollout)) &&
+    Array.isArray(flag.rules) && flag.rules.every(isRule);
+}
+
+function isRollout(value: unknown): boolean {
+  return !!value && typeof value === 'object' && Number.isInteger((value as { percentage?: unknown }).percentage) &&
+    typeof (value as { attribute?: unknown }).attribute === 'string';
+}
+
+function isRule(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const rule = value as { id?: unknown; priority?: unknown; result?: unknown; conditions?: unknown };
+  return typeof rule.id === 'string' && Number.isInteger(rule.priority) && typeof rule.result === 'boolean' &&
+    Array.isArray(rule.conditions) && rule.conditions.every(isCondition);
+}
+
+function isCondition(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const condition = value as { attribute?: unknown; operator?: unknown; value?: unknown };
+  return typeof condition.attribute === 'string' && typeof condition.operator === 'string' && condition.value !== undefined;
 }
 
 export type { EvaluationContext, EvaluationResult, FlagConfig, SdkConfig } from '@flagflagflag/evaluator';

@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FlagsClient } from './index.js';
-const config = { version: 1, environment: 'production', flags: { x: { key: 'x', enabled: true, defaultValue: true, rules: [] } } };
+const config = {
+  schemaVersion: 1,
+  configVersion: 1,
+  environment: { id: 'production-id', key: 'production' },
+  flags: { x: { key: 'x', enabled: true, defaultValue: true, rollout: null, rules: [] } },
+};
 function response(status: number, body: unknown, etag = '"1"'): Response {
   return new Response(body === undefined ? null : JSON.stringify(body), { status, headers: { ETag: etag } });
 }

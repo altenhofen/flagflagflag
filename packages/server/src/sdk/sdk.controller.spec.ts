@@ -3,16 +3,16 @@ import { UnauthorizedException } from '@nestjs/common';
 import { SdkController, SdkKeyGuard } from './sdk.controller.js';
 
 const environment = { id: 'production-id', name: 'production', projectId: 'project' };
-const config = { version: 42, environment: 'production', flags: {} };
+const config = { schemaVersion: 1 as const, configVersion: 42, environment: { id: 'production-id', key: 'production' }, flags: {} };
 function executionContext(request: Record<string, unknown>) {
   return { switchToHttp: () => ({ getRequest: () => request }) } as never;
 }
 
 describe('SDK transport', () => {
-  it('authenticates bearer keys and attaches their environment', async () => {
+  it('authenticates SDK header keys and attaches their environment', async () => {
     const sdk = { authenticate: vi.fn().mockResolvedValue(environment) };
     const guard = new SdkKeyGuard(sdk as never);
-    const request = { headers: { authorization: 'Bearer staging-key' } } as Record<string, unknown>;
+    const request = { headers: { 'x-sdk-key': 'staging-key' } } as Record<string, unknown>;
     await expect(guard.canActivate(executionContext(request))).resolves.toBe(true);
     expect(request.sdkEnvironment).toEqual(environment);
   });
