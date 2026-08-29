@@ -187,6 +187,7 @@ async function runSettingsWizard(
         try {
           await settingsStore.save(settings);
           unmount();
+          await exitPromise;
           resolve((await afterSave?.(settings)) ?? 0);
         } catch (cause) {
           reject(cause);
@@ -194,6 +195,7 @@ async function runSettingsWizard(
       }}
     />,
   );
+  const exitPromise = instance.waitUntilExit();
   unmount = instance.unmount;
   return promise;
 }
