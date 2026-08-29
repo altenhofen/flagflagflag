@@ -185,7 +185,7 @@ async function runSettingsWizard(
       initialSettings={initialSettings}
       onComplete={async (settings) => {
         try {
-          await settingsStore.save(settings);
+          instance.clear();
           unmount();
           await exitPromise;
           resolve((await afterSave?.(settings)) ?? 0);

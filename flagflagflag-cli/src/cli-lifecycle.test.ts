@@ -23,8 +23,10 @@ describe('CLI Ink lifecycle', () => {
   it('waits for settings teardown before mounting the project wizard', async () => {
     const renderMock = vi.mocked(render);
     const exit = Promise.withResolvers<void>();
+    const lifecycle: string[] = [];
     const settingsInstance = {
-      unmount: vi.fn(),
+      clear: vi.fn(() => lifecycle.push('clear')),
+      unmount: vi.fn(() => lifecycle.push('unmount')),
       waitUntilExit: vi.fn(() => exit.promise),
     };
     const projectInstance = { unmount: vi.fn() };
@@ -47,6 +49,7 @@ describe('CLI Ink lifecycle', () => {
     }>;
     const completion = settingsWizard.props.onComplete(settings);
     await vi.waitFor(() => expect(settingsInstance.unmount).toHaveBeenCalledOnce());
+    expect(lifecycle).toEqual(['clear', 'unmount']);
 
     expect(renderMock).toHaveBeenCalledOnce();
     exit.resolve();
