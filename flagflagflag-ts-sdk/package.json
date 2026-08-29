@@ -1,5 +1,5 @@
 {
-  "name": "@flagflagflag-sdk/core",
+  "name": "@flagflagflag/ts-sdk",
   "version": "0.0.1",
   "description": "A minimal TypeScript SDK for evaluating feature flags.",
   "type": "module",

@@ -2,10 +2,11 @@
 
 ## Repository shape
 
-This repository contains two packages:
+This repository contains three packages:
 
 - `flagflagflag-server/`: NestJS API, Better Auth, SQLite/PostgreSQL persistence.
-- `flagflagflag-sdk/`: browser/Node-compatible TypeScript feature-flag client.
+- `flagflagflag-ts-sdk/`: browser/Node-compatible TypeScript feature-flag client.
+- `flagflagflag-cli/`: Ink-based interactive CLI and feature-flag commands.
 
 Run package commands from the package directory. Keep changes scoped to the package
 that owns the behavior.
@@ -98,7 +99,7 @@ pnpm test
 pnpm test:e2e
 ```
 
-## `flagflagflag-sdk`
+## `flagflagflag-ts-sdk`
 
 The SDK exposes a small public surface:
 
@@ -115,7 +116,7 @@ evaluation.
 - Treat network errors, non-success responses, malformed responses, and unknown
   flags as disabled (`false`).
 - Keep the response parser defensive; only accept `{ enabled: boolean }`.
-- Build with the TypeScript compiler configured by `flagflagflag-sdk/tsconfig.json`.
+- Build with the TypeScript compiler configured by `flagflagflag-ts-sdk/tsconfig.json`.
 
 The SDK and server endpoint contract is:
 
@@ -123,6 +124,12 @@ The SDK and server endpoint contract is:
 GET /feature-flags/:name?projectId=:projectId&environment=:environment
 → { "enabled": boolean }
 ```
+
+## `flagflagflag-cli`
+
+The CLI uses Ink for its interactive wizard and the renamed TypeScript SDK for
+flag evaluation. Keep API access behind the `FlagApi` interface so the wizard
+and command runner remain testable at their public seams.
 
 ## Agent skills
 
