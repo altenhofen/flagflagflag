@@ -1,0 +1,8 @@
+{
+  "name": "flagflagflag-workspace",
+  "private": true,
+  "packageManager": "pnpm@10.14.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @flagflagflag/server --filter @flagflagflag/admin run dev"
+  }
+}
