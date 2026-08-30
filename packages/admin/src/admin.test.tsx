@@ -132,14 +132,17 @@ describe('admin control plane', () => {
     };
     const updated = { ...flag, name: 'Checkout v2', enabled: false, version: 2 };
     const rulesUpdated = { ...updated, rules: [...flag.rules, { id: 'rule-2', priority: 1, result: true, conditions: [{ attribute: 'country', operator: 'equals', value: 'US' }]}], version: 3 };
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ data: [{ id: 'p1', name: 'Core API' }] }))
-      .mockResolvedValueOnce(jsonResponse({ data: [environment] }))
-      .mockResolvedValueOnce(jsonResponse({ data: [environment] }))
-      .mockResolvedValueOnce(jsonResponse({ data: [flag] }))
-      .mockResolvedValueOnce(jsonResponse(updated))
-      .mockResolvedValueOnce(jsonResponse(rulesUpdated));
+    let patchCount = 0;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/audit-logs')) return Promise.resolve(jsonResponse({ data: [] }));
+      if (url.includes('/flags/') && init?.method === 'PATCH') { patchCount += 1; return Promise.resolve(jsonResponse(patchCount === 1 ? updated : rulesUpdated)); }
+      if (url.endsWith('/flags')) return Promise.resolve(jsonResponse({ data: [flag] }));
+      if (url.endsWith('/environments')) return Promise.resolve(jsonResponse({ data: [environment] }));
+      return Promise.resolve(jsonResponse({ data: [{ id: 'p1', name: 'Core API' }] }));
+    });
     vi.stubGlobal('fetch', fetchMock);
+    const patches = () => fetchMock.mock.calls.filter(call => (call[1] as RequestInit | undefined)?.method === 'PATCH');
     render(<Shell user={user} onLogout={vi.fn()} />);
 
     expect(await screen.findByText('Core API')).toBeInTheDocument();
@@ -156,14 +159,14 @@ describe('admin control plane', () => {
     fireEvent.click(screen.getByLabelText('Enabled'));
     fireEvent.click(screen.getByRole('button', { name: 'Save configuration' }));
     await waitFor(() => expect(screen.getByText('Saved.')).toBeInTheDocument());
-    expect(fetchMock.mock.calls[4][1]).toEqual(expect.objectContaining({ method: 'PATCH', body: expect.stringContaining('"enabled":false') }));
+    expect(patches()[0][1]).toEqual(expect.objectContaining({ method: 'PATCH', body: expect.stringContaining('"enabled":false') }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit targeting' }));
     expect(screen.getByText(/Draft mode/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '＋ Add rule' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save targeting' }));
     await waitFor(() => expect(screen.getByText('Saved.')).toBeInTheDocument());
-    expect(fetchMock.mock.calls[5][1]).toEqual(expect.objectContaining({ method: 'PATCH', body: expect.stringContaining('"priority":1') }));
+    expect(patches()[1][1]).toEqual(expect.objectContaining({ method: 'PATCH', body: expect.stringContaining('"priority":1') }));
   });
 
   it('reveals an SDK secret once, then tracks revocation without retaining the secret', async () => {
