@@ -47,10 +47,12 @@ export class AuditInterceptor implements NestInterceptor {
     const environmentId =
       environmentIndex >= 0 ? parts[environmentIndex + 1] : undefined;
     const resourceType = resourceTypeFor(parts);
-    const resourceId =
-      parts.at(-1) === resourceType
-        ? resolvedProject
-        : (parts.at(-1) ?? resolvedProject);
+    const resourceId = resourceIdFor(
+      parts,
+      resourceType,
+      resolvedProject,
+      projectResponse,
+    );
     const action = `${request.method.toLowerCase()}.${actionFor(request.method, parts)}`;
     const body =
       request.body && typeof request.body === 'object'
@@ -75,6 +77,30 @@ function resourceTypeFor(parts: string[]): string {
   if (parts.includes('environments')) return 'environment';
   if (parts.includes('audit-retention')) return 'audit-retention';
   return 'project';
+}
+
+function resourceIdFor(
+  parts: string[],
+  resourceType: string,
+  projectId: string,
+  response: Record<string, unknown> | undefined,
+): string {
+  const collection =
+    resourceType === 'feature-flag'
+      ? 'flags'
+      : resourceType === 'sdk-key'
+        ? 'sdk-keys'
+        : resourceType === 'environment'
+          ? 'environments'
+          : resourceType === 'project'
+            ? 'projects'
+            : 'audit-retention';
+  const pathId = parts.at(-1);
+  if (pathId && pathId !== collection) return pathId;
+  if (typeof response?.id === 'string') return response.id;
+  if (resourceType === 'feature-flag' && typeof response?.key === 'string')
+    return response.key;
+  return projectId;
 }
 
 function actionFor(method: string, parts: string[]): string {

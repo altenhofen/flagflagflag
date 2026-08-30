@@ -1,4 +1,10 @@
-import { MigrationInterface, QueryRunner, Table, TableIndex } from 'typeorm';
+import {
+  MigrationInterface,
+  QueryRunner,
+  Table,
+  TableColumn,
+  TableIndex,
+} from 'typeorm';
 
 export class AuditMigration20260829090000 implements MigrationInterface {
   name = 'AuditMigration20260829090000';
@@ -20,6 +26,7 @@ export class AuditMigration20260829090000 implements MigrationInterface {
             type: timestampType,
             default: 'CURRENT_TIMESTAMP',
           },
+          { name: 'createdAtEpoch', type: 'integer' },
           { name: 'actorId', type: 'text' },
           { name: 'action', type: 'text' },
           { name: 'resourceType', type: 'text' },
@@ -33,6 +40,16 @@ export class AuditMigration20260829090000 implements MigrationInterface {
       true,
     );
     const table = await queryRunner.getTable('audit_entry');
+    if (table && !table.findColumnByName('createdAtEpoch')) {
+      await queryRunner.addColumn(
+        'audit_entry',
+        new TableColumn({
+          name: 'createdAtEpoch',
+          type: 'integer',
+          default: '0',
+        }),
+      );
+    }
     if (
       !table?.indices.some(
         (index) => index.name === 'idx_audit_project_created',

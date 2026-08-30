@@ -57,9 +57,9 @@ describe('AuditService', () => {
     const entries = repository();
     const retention = repository();
     const rows = [
-      { id: 'new', createdAt: new Date('2026-01-02T00:00:00.000Z') },
-      { id: 'old', createdAt: new Date('2026-01-01T00:00:00.000Z') },
-      { id: 'more', createdAt: new Date('2025-12-31T00:00:00.000Z') },
+      { id: 'new', createdAtEpoch: 1767312000000, createdAt: new Date('2026-01-02T00:00:00.000Z') },
+      { id: 'old', createdAtEpoch: 1767225600000, createdAt: new Date('2026-01-01T00:00:00.000Z') },
+      { id: 'more', createdAtEpoch: 1767139200000, createdAt: new Date('2025-12-31T00:00:00.000Z') },
     ];
     const queryBuilder = {
       where: vi.fn().mockReturnThis(),
@@ -94,6 +94,10 @@ describe('AuditService', () => {
     );
     expect(result.data).toEqual(rows.slice(0, 2));
     expect(result.nextCursor).toBeTruthy();
+    expect(queryBuilder.orderBy).toHaveBeenCalledWith(
+      'audit.createdAtEpoch',
+      'DESC',
+    );
   });
 
   it('deletes only entries older than the configured retention cutoff', async () => {

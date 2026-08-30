@@ -39,9 +39,12 @@ export class AuditService {
   ) {}
 
   async record(input: AuditRecord): Promise<void> {
+    const now = new Date();
     const entry = this.repository.create({
       ...input,
       id: randomUUID(),
+      createdAt: now,
+      createdAtEpoch: now.getTime(),
       environmentId: input.environmentId ?? null,
       before: redact(input.before),
       after: redact(input.after),
@@ -56,7 +59,7 @@ export class AuditService {
     const qb = this.repository
       .createQueryBuilder('audit')
       .where('audit.projectId = :projectId', { projectId: query.projectId })
-      .orderBy('audit.createdAt', 'DESC')
+      .orderBy('audit.createdAtEpoch', 'DESC')
       .addOrderBy('audit.id', 'DESC')
       .take(limit + 1);
     if (query.environmentId)
@@ -72,7 +75,7 @@ export class AuditService {
     if (query.cursor) {
       const decoded = decodeCursor(query.cursor);
       qb.andWhere(
-        '(audit.createdAt < :cursorDate OR (audit.createdAt = :cursorDate AND audit.id < :cursorId))',
+        '(audit.createdAtEpoch < :cursorEpoch OR (audit.createdAtEpoch = :cursorEpoch AND audit.id < :cursorId))',
         decoded,
       );
     }
@@ -122,20 +125,26 @@ export class AuditService {
 
 function encodeCursor(entry: AuditEntryEntity): string {
   return Buffer.from(
-    JSON.stringify({ date: entry.createdAt.toISOString(), id: entry.id }),
+    JSON.stringify({ epoch: entry.createdAtEpoch, id: entry.id }),
   ).toString('base64url');
 }
 
 function decodeCursor(cursor: string): {
-  cursorDate: string;
+  cursorEpoch: number;
   cursorId: string;
 } {
   try {
     const parsed = JSON.parse(
       Buffer.from(cursor, 'base64url').toString('utf8'),
-    ) as { date?: string; id?: string };
-    if (!parsed.date || !parsed.id) throw new Error();
-    return { cursorDate: parsed.date, cursorId: parsed.id };
+    ) as { epoch?: unknown; id?: unknown };
+    if (
+      typeof parsed.epoch !== 'number' ||
+      !Number.isSafeInteger(parsed.epoch) ||
+      typeof parsed.id !== 'string' ||
+      parsed.id.length === 0
+    )
+      throw new Error();
+    return { cursorEpoch: parsed.epoch, cursorId: parsed.id };
   } catch {
     throw new BadRequestException('Invalid audit cursor');
   }

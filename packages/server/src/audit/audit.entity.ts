@@ -11,6 +11,9 @@ export class AuditEntryEntity {
   @CreateDateColumn()
   createdAt!: Date;
 
+  @Column({ type: 'integer' })
+  createdAtEpoch!: number;
+
   @Column({ type: 'text' })
   actorId!: string;
 
