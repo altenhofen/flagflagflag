@@ -1,3 +1,13 @@
+import { AuditController } from './audit/audit.controller.js';
+import { AuditEntryEntity } from './audit/audit.entity.js';
+import { AuditInterceptor } from './audit/audit.interceptor.js';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditRetentionEntity } from './audit/audit-retention.entity.js';
+import {
+  AUDIT_REPOSITORY,
+  AUDIT_RETENTION_REPOSITORY,
+  AuditService,
+} from './audit/audit.service.js';
 import { Module } from '@nestjs/common';
 import { createObserveModule } from '@nestjs/observe';
 import { SdkModule } from './sdk/sdk.module.js';
@@ -48,6 +58,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     FeatureFlagController,
     ProjectController,
     RuntimeEvaluationController,
+    AuditController,
   ],
   providers: [
     {
@@ -78,6 +89,25 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
         return featureFlagDataSource.getRepository(SdkConfigVersionEntity);
       },
     },
+    {
+      provide: AUDIT_REPOSITORY,
+      useFactory: async () => {
+        await initializeDatabase();
+        return featureFlagDataSource.getRepository(AuditEntryEntity);
+      },
+    },
+    {
+      provide: AUDIT_RETENTION_REPOSITORY,
+      useFactory: async () => {
+        await initializeDatabase();
+        return featureFlagDataSource.getRepository(AuditRetentionEntity);
+      },
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor,
+    },
+    AuditService,
     RuntimeEvaluationService,
     AppService,
     EnvironmentService,
