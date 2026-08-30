@@ -100,6 +100,71 @@ describe('AuditService', () => {
     );
   });
 
+  it('exports readable retained fields with recursively redacted history', async () => {
+    const entries = repository();
+    const retention = repository();
+    retention.findOneBy.mockResolvedValue({ id: 'default', retentionDays: 30 });
+    const row = {
+      id: 'entry',
+      createdAt: new Date('2026-01-02T03:04:05.000Z'),
+      createdAtEpoch: 1767323045000,
+      actorId: 'operator',
+      action: 'update',
+      resourceType: 'sdk-key',
+      resourceId: 'key',
+      environmentId: null,
+      summary: 'updated SDK key',
+      before: {
+        prefix: 'ff_',
+        secret: 'before-secret',
+        nested: { password: 'before-password', enabled: false },
+      },
+      after: {
+        prefix: 'ff_',
+        apiKey: 'after-secret',
+        nested: { token: 'after-token', enabled: true },
+      },
+    };
+    const queryBuilder = {
+      where: vi.fn().mockReturnThis(),
+      andWhere: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockReturnThis(),
+      addOrderBy: vi.fn().mockReturnThis(),
+      take: vi.fn().mockReturnThis(),
+      getMany: vi.fn().mockResolvedValue([row]),
+    };
+    entries.createQueryBuilder.mockReturnValue(queryBuilder);
+    const service = new AuditService(entries, retention);
+
+    await expect(
+      service.export({
+        projectId: 'project',
+        includeBefore: true,
+        includeAfter: true,
+      }),
+    ).resolves.toEqual({
+      data: [
+        {
+          id: 'entry',
+          createdAt: '2026-01-02T03:04:05.000Z',
+          actorId: 'operator',
+          action: 'update',
+          resourceType: 'sdk-key',
+          resourceId: 'key',
+          environmentId: null,
+          summary: 'updated SDK key',
+          before: { prefix: 'ff_', nested: { enabled: false } },
+          after: { prefix: 'ff_', nested: { enabled: true } },
+        },
+      ],
+      nextCursor: null,
+    });
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'audit.createdAt >= :retentionCutoff',
+      { retentionCutoff: expect.any(Date) },
+    );
+  });
+
   it('deletes only entries older than the configured retention cutoff', async () => {
     const entries = repository();
     const retention = repository();

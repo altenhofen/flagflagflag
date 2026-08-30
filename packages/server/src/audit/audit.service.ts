@@ -29,6 +29,30 @@ export interface AuditQuery {
   cursor?: string;
 }
 
+export interface AuditExportQuery extends AuditQuery {
+  includeBefore?: boolean;
+  includeAfter?: boolean;
+}
+
+export interface AuditExportEntry {
+  id: string;
+  projectId: string;
+  createdAt: string;
+  actorId: string;
+  action: string;
+  resourceType: string;
+  resourceId: string;
+  environmentId: string | null;
+  summary: string;
+  before?: Record<string, unknown> | null;
+  after?: Record<string, unknown> | null;
+}
+
+export interface AuditExportResult {
+  data: AuditExportEntry[];
+  nextCursor: string | null;
+}
+
 @Injectable()
 export class AuditService {
   constructor(
@@ -62,6 +86,14 @@ export class AuditService {
       .orderBy('audit.createdAtEpoch', 'DESC')
       .addOrderBy('audit.id', 'DESC')
       .take(limit + 1);
+    const { retentionDays } = await this.getRetention();
+    const retentionCutoff = new Date(
+      Date.now() - retentionDays * 86_400_000,
+    );
+    qb.andWhere('audit.createdAt >= :retentionCutoff', {
+      retentionCutoff,
+    });
+
     if (query.environmentId)
       qb.andWhere('audit.environmentId = :environmentId', {
         environmentId: query.environmentId,
@@ -85,6 +117,31 @@ export class AuditService {
     return {
       data,
       nextCursor: hasMore ? encodeCursor(data[data.length - 1]) : null,
+    };
+  }
+
+  async export(query: AuditExportQuery): Promise<AuditExportResult> {
+    const result = await this.list(query);
+    return {
+      data: result.data.map((entry) => {
+        const exported: AuditExportEntry = {
+          projectId: entry.projectId,
+          id: entry.id,
+          createdAt: entry.createdAt.toISOString(),
+          actorId: entry.actorId,
+          action: entry.action,
+          resourceType: entry.resourceType,
+          resourceId: entry.resourceId,
+          environmentId: entry.environmentId,
+          summary: entry.summary,
+        };
+        if (query.includeBefore)
+          exported.before = redact(entry.before);
+        if (query.includeAfter)
+          exported.after = redact(entry.after);
+        return exported;
+      }),
+      nextCursor: result.nextCursor,
     };
   }
 
@@ -157,11 +214,20 @@ function redact(
   const output: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
     if (
-      /^(key|password|secret|token|privatekey|api[-_]?key)$/i.test(key) ||
+      /^(key|password|secret|token|private[-_]?key|api[-_]?key|sdk[-_]?key|sdk[-_]?secret)$/i.test(
+        key,
+      ) ||
       /hash/i.test(key)
     )
       continue;
-    output[key] = item;
+    output[key] = redactNested(item);
   }
   return output;
+}
+
+function redactNested(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((item) => redactNested(item));
+  if (value && typeof value === 'object')
+    return redact(value as Record<string, unknown>);
+  return value;
 }

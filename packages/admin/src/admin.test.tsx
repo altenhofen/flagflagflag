@@ -7,6 +7,8 @@ import type { User } from './api.js';
 const user: User = { id: 'u1', username: 'flag3', name: 'Flag Three', email: 'flag3@example.test' };
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
+const jsonResponse = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
+
 describe('admin control plane', () => {
   it('restores an existing session through /auth/me', async () => {
     const fetchMock = vi.fn()
@@ -78,8 +80,178 @@ describe('admin control plane', () => {
     await expect(api.flags('p1', 'e1')).rejects.toMatchObject({ status: 502 });
   });
   it('exports audit logs with active filters as CSV', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('id,action\n1,create\n', { status: 200, headers: { 'content-type': 'text/csv' } })));
-    await expect(api.exportAudit('p one', { environmentId: 'e 1', action: 'create' })).resolves.toContain('id,action');
-    expect(vi.mocked(fetch).mock.calls[0][0]).toBe('/api/v1/projects/p%20one/audit-logs/export?environmentId=e+1&action=create');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('id,action\n1,post.create\n', { status: 200, headers: { 'content-type': 'text/csv' } })));
+    await expect(api.exportAudit('p one', { environmentId: 'e 1', action: 'post.create' })).resolves.toContain('id,action');
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe('/api/v1/projects/p%20one/audit-logs/export?environmentId=e+1&action=post.create');
+  });
+  it('creates, renames, selects, and deletes environments from the rendered workspace', async () => {
+    const first = { id: 'e1', name: 'development', projectId: 'p1' };
+    const second = { id: 'e2', name: 'staging', projectId: 'p1' };
+    const renamed = { ...first, name: 'preview' };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ data: [{ id: 'p1', name: 'Core API' }] }))
+      .mockResolvedValueOnce(jsonResponse({ data: [first] }))
+      .mockResolvedValueOnce(jsonResponse(second))
+      .mockResolvedValueOnce(jsonResponse({ data: [first, second] }))
+      .mockResolvedValueOnce(jsonResponse(renamed))
+      .mockResolvedValueOnce(jsonResponse({ data: [renamed, second] }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(jsonResponse({ data: [second] }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    render(<Shell user={user} onLogout={vi.fn()} />);
+
+    expect(await screen.findByText('Core API')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Core API/ }));
+    expect(await screen.findByText('development')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Environment name'), { target: { value: 'staging' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add environment' }));
+    expect(await screen.findByText('staging')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Rename' })[0]);
+    fireEvent.change(screen.getByLabelText('New name'), { target: { value: 'preview' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('preview')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0]);
+    await waitFor(() => expect(screen.queryByText('preview')).not.toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/projects/p1/environments/e1', expect.objectContaining({ method: 'DELETE' }));
+  });
+
+  it('filters flags and saves configuration plus targeting rules through accessible controls', async () => {
+    const environment = { id: 'e1', name: 'development', projectId: 'p1' };
+    const flag = {
+      key: 'checkout',
+      name: 'Checkout',
+      environmentId: 'e1',
+      enabled: true,
+      defaultValue: false,
+      rollout: null,
+      rules: [{ id: 'rule-1', priority: 0, result: true, conditions: [{ attribute: 'plan', operator: 'equals', value: 'pro' }] }],
+      version: 1,
+    };
+    const updated = { ...flag, name: 'Checkout v2', enabled: false, version: 2 };
+    const rulesUpdated = { ...updated, rules: [...flag.rules, { id: 'rule-2', priority: 1, result: true, conditions: [{ attribute: 'country', operator: 'equals', value: 'US' }]}], version: 3 };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ data: [{ id: 'p1', name: 'Core API' }] }))
+      .mockResolvedValueOnce(jsonResponse({ data: [environment] }))
+      .mockResolvedValueOnce(jsonResponse({ data: [environment] }))
+      .mockResolvedValueOnce(jsonResponse({ data: [flag] }))
+      .mockResolvedValueOnce(jsonResponse(updated))
+      .mockResolvedValueOnce(jsonResponse(rulesUpdated));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<Shell user={user} onLogout={vi.fn()} />);
+
+    expect(await screen.findByText('Core API')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Core API/ }));
+    expect(await screen.findByText('development')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Feature flags' }));
+    expect(await screen.findByRole('button', { name: /Checkout checkout/ })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Search flags'), { target: { value: 'missing' } });
+    expect(screen.queryByRole('button', { name: /Checkout checkout/ })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Search flags'), { target: { value: 'checkout' } });
+    fireEvent.click(screen.getByRole('button', { name: /Checkout checkout/ }));
+    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Checkout v2' } });
+    fireEvent.click(screen.getByLabelText('Enabled'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save configuration' }));
+    await waitFor(() => expect(screen.getByText('Saved.')).toBeInTheDocument());
+    expect(fetchMock.mock.calls[4][1]).toEqual(expect.objectContaining({ method: 'PATCH', body: expect.stringContaining('"enabled":false') }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit targeting' }));
+    expect(screen.getByText(/Draft mode/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '＋ Add rule' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save targeting' }));
+    await waitFor(() => expect(screen.getByText('Saved.')).toBeInTheDocument());
+    expect(fetchMock.mock.calls[5][1]).toEqual(expect.objectContaining({ method: 'PATCH', body: expect.stringContaining('"priority":1') }));
+  });
+
+  it('reveals an SDK secret once, then tracks revocation without retaining the secret', async () => {
+    const environment = { id: 'e1', name: 'development', projectId: 'p1' };
+    const issued = { id: 'key-1', key: 'secret-once', prefix: 'secret-o', environmentId: 'e1', createdAt: '2026-01-01T00:00:00.000Z' };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ data: [{ id: 'p1', name: 'Core API' }] }))
+      .mockResolvedValueOnce(jsonResponse({ data: [environment] }))
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse(issued))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    render(<Shell user={user} onLogout={vi.fn()} />);
+
+    expect(await screen.findByText('Core API')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Core API/ }));
+    expect(await screen.findByText('development')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'SDK keys' }));
+    expect(await screen.findByText('No SDK keys')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Issue key' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('secret-once');
+    fireEvent.click(screen.getByRole('button', { name: 'I stored it' }));
+    expect(screen.queryByText('secret-once')).not.toBeInTheDocument();
+    expect(screen.getByText('secret-o…')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+    expect(await screen.findByText('Revoked')).toBeInTheDocument();
+  });
+
+  it('filters audit history, validates retention, and reports export failures', async () => {
+    const environment = { id: 'e1', name: 'production', projectId: 'p1' };
+    const entry = {
+      id: 'audit-1',
+      projectId: 'p1',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      createdAtEpoch: 1767225600000,
+      actorId: 'u1',
+      action: 'patch.update',
+      resourceType: 'feature-flag',
+      resourceId: 'checkout',
+      environmentId: 'e1',
+      summary: 'Updated Checkout',
+      before: { enabled: true },
+      after: { enabled: false },
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/audit-logs/export')) return Promise.resolve(jsonResponse({ detail: 'not found' }, 404));
+      if (url.includes('/audit-logs')) return Promise.resolve(jsonResponse({ data: [entry] }));
+      if (url.includes('/audit-retention') && init?.method === 'PATCH') return Promise.resolve(jsonResponse({ retentionDays: 30 }));
+      if (url.includes('/audit-retention')) return Promise.resolve(jsonResponse({ retentionDays: 90 }));
+      if (url.endsWith('/environments')) return Promise.resolve(jsonResponse({ data: [environment] }));
+      return Promise.resolve(jsonResponse({ data: [{ id: 'p1', name: 'Core API' }] }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<Shell user={user} onLogout={vi.fn()} />);
+
+    expect(await screen.findByText('Core API')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Core API/ }));
+    expect(await screen.findByText('production')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Audit & retention' }));
+    expect(await screen.findByText('Updated Checkout')).toBeInTheDocument();
+    fireEvent.change(document.getElementById('audit-env')!, { target: { value: 'e1' } });
+    fireEvent.change(screen.getByLabelText('Resource'), { target: { value: 'feature-flag' } });
+    fireEvent.change(screen.getByLabelText('Action'), { target: { value: 'patch.update' } });
+    fireEvent.change(document.getElementById('retention-days')!, { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save retention' }));
+    fireEvent.change(document.getElementById('retention-days')!, { target: { value: '30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save retention' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/v1/projects/p1/audit-logs?environmentId=e1&resourceType=feature-flag&action=patch.update', expect.anything()));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/v1/projects/p1/audit-retention', expect.objectContaining({ method: 'PATCH' })));
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Audit export is not available on this server.');
+    fireEvent.click(screen.getByRole('button', { name: /Updated Checkout/ }));
+    expect(screen.getByRole('button', { name: /Updated Checkout/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText(/"enabled": true/)).toBeInTheDocument();
+  });
+
+  it('keeps navigation operable at reduced width with named controls', async () => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 360 });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse({ data: [] })));
+    render(<Shell user={user} onLogout={vi.fn()} />);
+    expect(await screen.findByText('No projects yet')).toBeInTheDocument();
+    const toggle = screen.getByRole('button', { name: 'Toggle navigation' });
+    expect(toggle).toHaveAccessibleName('Toggle navigation');
+    fireEvent.click(toggle);
+    expect(screen.getByRole('navigation', { name: 'Workspace' }).closest('aside')).toHaveClass('open');
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
   });
 });

@@ -8,6 +8,11 @@ import {
   AUDIT_RETENTION_REPOSITORY,
   AuditService,
 } from './audit/audit.service.js';
+import {
+  AUDIT_RETENTION_CLEANUP_INTERVAL,
+  AuditRetentionCleanupService,
+  getAuditRetentionCleanupIntervalMs,
+} from './audit/audit-retention-cleanup.service.js';
 import { Module } from '@nestjs/common';
 import { createObserveModule } from '@nestjs/observe';
 import { SdkModule } from './sdk/sdk.module.js';
@@ -104,10 +109,15 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       },
     },
     {
+      provide: AUDIT_RETENTION_CLEANUP_INTERVAL,
+      useFactory: getAuditRetentionCleanupIntervalMs,
+    },
+    AuditService,
+    AuditRetentionCleanupService,
+    {
       provide: APP_INTERCEPTOR,
       useClass: AuditInterceptor,
     },
-    AuditService,
     RuntimeEvaluationService,
     AppService,
     EnvironmentService,
