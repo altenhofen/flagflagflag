@@ -5,7 +5,7 @@ import { api } from './api.js';
 import type { User } from './api.js';
 
 const user: User = { id: 'u1', username: 'flag3', name: 'Flag Three', email: 'flag3@example.test' };
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState({}, '', '/'); });
 
 const jsonResponse = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
 
@@ -44,7 +44,7 @@ describe('admin control plane', () => {
     vi.stubGlobal('fetch', fetchMock);
     render(<Shell user={user} onLogout={vi.fn()} />);
     expect(await screen.findByText('Core API')).toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText('New project name'), { target: { value: 'Web app' } });
+    fireEvent.change(screen.getByLabelText('New project name'), { target: { value: 'Web app' } });
     fireEvent.click(screen.getByRole('button', { name: /create project/i }));
     await waitFor(() => expect(screen.getAllByText('Web app').length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
@@ -144,15 +144,18 @@ describe('admin control plane', () => {
     vi.stubGlobal('fetch', fetchMock);
     const patches = () => fetchMock.mock.calls.filter(call => (call[1] as RequestInit | undefined)?.method === 'PATCH');
     render(<Shell user={user} onLogout={vi.fn()} />);
-
     expect(await screen.findByText('Core API')).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: /Core API/ }));
     expect(await screen.findByText('development')).toBeInTheDocument();
+    expect(window.location.search).toContain('project=p1');
     fireEvent.click(screen.getByRole('button', { name: 'Feature flags' }));
     expect(await screen.findByRole('button', { name: /Checkout checkout/ })).toBeInTheDocument();
+    expect(window.location.search).toContain('tab=flags');
 
     fireEvent.change(screen.getByLabelText('Search flags'), { target: { value: 'missing' } });
     expect(screen.queryByRole('button', { name: /Checkout checkout/ })).not.toBeInTheDocument();
+    expect(screen.getByText('No flags match “missing”')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Search flags'), { target: { value: 'checkout' } });
     fireEvent.click(screen.getByRole('button', { name: /Checkout checkout/ }));
     fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Checkout v2' } });
@@ -167,6 +170,30 @@ describe('admin control plane', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save targeting' }));
     await waitFor(() => expect(screen.getByText('Saved.')).toBeInTheDocument());
     expect(patches()[1][1]).toEqual(expect.objectContaining({ method: 'PATCH', body: expect.stringContaining('"priority":1') }));
+  });
+  it('protects dirty flag edits when leaving the editor', async () => {
+    const environment = { id: 'e1', name: 'development', projectId: 'p1' };
+    const flag = { key: 'checkout', name: 'Checkout', environmentId: 'e1', enabled: true, defaultValue: false, rollout: null, rules: [], version: 1 };
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/audit-logs')) return Promise.resolve(jsonResponse({ data: [] }));
+      if (url.endsWith('/flags')) return Promise.resolve(jsonResponse({ data: [flag] }));
+      if (url.endsWith('/environments')) return Promise.resolve(jsonResponse({ data: [environment] }));
+      return Promise.resolve(jsonResponse({ data: [{ id: 'p1', name: 'Core API' }] }));
+    }));
+    const confirmMock = vi.fn(() => false);
+    vi.stubGlobal('confirm', confirmMock);
+    render(<Shell user={user} onLogout={vi.fn()} />);
+
+    expect(await screen.findByText('Core API')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Core API/ }));
+    expect(await screen.findByText('development')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Feature flags' }));
+    fireEvent.change(await screen.findByLabelText('Display name'), { target: { value: 'Unsaved checkout' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Environments' }));
+
+    expect(confirmMock).toHaveBeenCalledWith('You have unsaved changes. Leave without saving?');
+    expect(screen.getByLabelText('Display name')).toHaveValue('Unsaved checkout');
   });
 
   it('reveals an SDK secret once, then tracks revocation without retaining the secret', async () => {
@@ -188,7 +215,7 @@ describe('admin control plane', () => {
     fireEvent.click(screen.getByRole('button', { name: 'SDK keys' }));
     expect(await screen.findByText('No SDK keys')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Issue key' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('secret-once');
+    expect(await screen.findByRole('region', { name: 'New SDK secret' })).toHaveTextContent('secret-once');
     fireEvent.click(screen.getByRole('button', { name: 'I stored it' }));
     expect(screen.queryByText('secret-once')).not.toBeInTheDocument();
     expect(screen.getByText('secret-o…')).toBeInTheDocument();
@@ -244,6 +271,30 @@ describe('admin control plane', () => {
     expect(screen.getByRole('button', { name: /Updated Checkout/ })).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText(/"enabled": true/)).toBeInTheDocument();
   });
+  it('loads additional audit entries from the server cursor', async () => {
+    const environment = { id: 'e1', name: 'production', projectId: 'p1' };
+    const entry = (id: string) => ({ id, projectId: 'p1', createdAt: '2026-01-01T00:00:00.000Z', createdAtEpoch: 1767225600000, actorId: 'u1', action: 'patch.update', resourceType: 'feature-flag', resourceId: id, environmentId: 'e1', summary: `Updated ${id}`, before: null, after: null });
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/audit-logs')) {
+        return Promise.resolve(url.includes('cursor=next') ? jsonResponse({ data: [entry('second')], pagination: { nextCursor: null } }) : jsonResponse({ data: [entry('first')], pagination: { nextCursor: 'next' } }));
+      }
+      if (url.includes('/audit-retention')) return Promise.resolve(jsonResponse({ retentionDays: 90 }));
+      if (url.endsWith('/environments')) return Promise.resolve(jsonResponse({ data: [environment] }));
+      return Promise.resolve(jsonResponse({ data: [{ id: 'p1', name: 'Core API' }] }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<Shell user={user} onLogout={vi.fn()} />);
+
+    expect(await screen.findByText('Core API')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Core API/ }));
+    expect(await screen.findByText('production')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Audit & retention' }));
+    expect(await screen.findByText('Updated first')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Load more entries' }));
+    expect(await screen.findByText('Updated second')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/projects/p1/audit-logs?limit=50&cursor=next', expect.anything());
+  });
 
   it('keeps navigation operable at reduced width with named controls', async () => {
     const originalWidth = window.innerWidth;
@@ -253,8 +304,13 @@ describe('admin control plane', () => {
     expect(await screen.findByText('No projects yet')).toBeInTheDocument();
     const toggle = screen.getByRole('button', { name: 'Toggle navigation' });
     expect(toggle).toHaveAccessibleName('Toggle navigation');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('navigation', { name: 'Workspace' }).closest('aside')).toHaveClass('open');
+    fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('navigation', { name: 'Workspace' }).closest('aside')).not.toHaveClass('open');
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
   });
 });

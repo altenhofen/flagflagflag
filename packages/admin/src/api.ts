@@ -11,6 +11,7 @@ export interface SdkKeyMetadata { id: string; prefix: string; environmentId: str
 export interface IssuedSdkKey extends Omit<SdkKeyMetadata, 'revokedAt'> { key: string }
 export interface AuditEntry { id: string; projectId: string; createdAt: string | Date; createdAtEpoch: number; actorId: string; action: string; resourceType: string; resourceId: string; environmentId: string | null; summary: string; before: Record<string, unknown> | null; after: Record<string, unknown> | null }
 export interface Page<T> { data: T[]; pagination?: { nextCursor: string | null } }
+export interface AuditFilters { environmentId?: string; resourceType?: string; action?: string; limit?: number; cursor?: string }
 
 const API_URL = import.meta.env.VITE_API_URL ?? '/api/v1';
 export class ApiError extends Error { constructor(public readonly status: number, message: string) { super(message); this.name = 'ApiError'; } }
@@ -63,7 +64,7 @@ export const api = {
   sdkKeys: (projectId: string, environmentId: string) => request<SdkKeyMetadata[]>(`/${path('projects', projectId, 'environments', environmentId, 'sdk-keys')}`, {}, (value): value is SdkKeyMetadata[] => Array.isArray(value) && value.every(isSdkMetadata)),
   createSdkKey: (projectId: string, environmentId: string) => request<IssuedSdkKey>(`/${path('projects', projectId, 'environments', environmentId, 'sdk-keys')}`, { method: 'POST' }, isIssuedKey),
   revokeSdkKey: (projectId: string, environmentId: string, id: string) => request<void>(`/${path('projects', projectId, 'environments', environmentId, 'sdk-keys', id)}`, { method: 'DELETE' }),
-  auditLogs: (projectId: string, filters: { environmentId?: string; resourceType?: string; action?: string } = {}) => { const query = new URLSearchParams(Object.entries(filters).filter((entry): entry is [string, string] => Boolean(entry[1]))); return request<Page<AuditEntry>>(`/${path('projects', projectId, 'audit-logs')}${query.size ? `?${query}` : ''}`, {}, isPage(isAudit)); },
+  auditLogs: (projectId: string, filters: AuditFilters = {}) => { const query = new URLSearchParams(Object.entries(filters).filter((entry): entry is [string, string | number] => entry[1] !== undefined && entry[1] !== '').map(([key, value]) => [key, String(value)])); return request<Page<AuditEntry>>(`/${path('projects', projectId, 'audit-logs')}${query.size ? `?${query}` : ''}`, {}, isPage(isAudit)); },
   auditRetention: (projectId: string) => request<{ retentionDays: number }>(`/${path('projects', projectId, 'audit-retention')}`, {}, isRetention),
   setAuditRetention: (projectId: string, retentionDays: number) => request<{ retentionDays: number }>(`/${path('projects', projectId, 'audit-retention')}`, { method: 'PATCH', body: JSON.stringify({ retentionDays }) }, isRetention),
   exportAudit: (projectId: string, filters: { environmentId?: string; resourceType?: string; action?: string } = {}) => { const query = new URLSearchParams(Object.entries(filters).filter((entry): entry is [string, string] => Boolean(entry[1]))); return request<string>(`/${path('projects', projectId, 'audit-logs')}/export${query.size ? `?${query}` : ''}`, { headers: { Accept: 'text/csv' } }); },
