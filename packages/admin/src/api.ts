@@ -17,25 +17,34 @@ function messageFrom(body: unknown): string {
   return 'Something went wrong. Please try again.';
 }
 
-export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...init.headers },
-  });
-  const text = await response.text();
-  let body: unknown;
-  if (text) {
-    try { body = JSON.parse(text) as unknown; } catch { body = undefined; }
-  }
-  if (!response.ok) throw new ApiError(response.status, messageFrom(body));
-  return body as T;
+function isProject(value: unknown): value is Project {
+  return typeof value === 'object' && value !== null && 'id' in value && typeof value.id === 'string' && 'name' in value && typeof value.name === 'string';
+}
+function isUser(value: unknown): value is User {
+  return isProject(value) && 'username' in value && typeof value.username === 'string' && 'email' in value && typeof value.email === 'string';
+}
+function validate<T>(body: unknown, guard: (value: unknown) => value is T): T {
+  if (!guard(body)) throw new ApiError(502, 'The server returned an invalid response.');
+  return body;
 }
 
+export async function request<T>(path: string, init: RequestInit = {}, guard?: (value: unknown) => value is T): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, { ...init, credentials: 'include', headers: { 'Content-Type': 'application/json', ...init.headers } });
+  const text = await response.text();
+  let body: unknown;
+  if (text) { try { body = JSON.parse(text) as unknown; } catch { body = undefined; } }
+  if (!response.ok) throw new ApiError(response.status, messageFrom(body));
+  return guard ? validate(body, guard) : body as T;
+}
+
+const isUserResponse = (value: unknown): value is { user: User } => typeof value === 'object' && value !== null && 'user' in value && isUser(value.user);
+const isProjectList = (value: unknown): value is { data: Project[] } => typeof value === 'object' && value !== null && 'data' in value && Array.isArray(value.data) && value.data.every(isProject);
+const isStatus = (value: unknown): value is { status: boolean } => typeof value === 'object' && value !== null && 'status' in value && typeof value.status === 'boolean';
+
 export const api = {
-  me: () => request<User>('/auth/me'),
-  login: (username: string, password: string) => request<{ user: User }>('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
-  logout: () => request<{ status: boolean }>('/auth/logout', { method: 'POST' }),
-  projects: () => request<{ data: Project[] }>('/projects'),
-  createProject: (name: string) => request<Project>('/projects', { method: 'POST', body: JSON.stringify({ name }) }),
+  me: () => request<User>('/auth/me', {}, isUser),
+  login: (username: string, password: string) => request<{ user: User }>('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }, isUserResponse),
+  logout: () => request<{ status: boolean }>('/auth/logout', { method: 'POST' }, isStatus),
+  projects: () => request<{ data: Project[] }>('/projects', {}, isProjectList),
+  createProject: (name: string) => request<Project>('/projects', { method: 'POST', body: JSON.stringify({ name }) }, isProject),
 };

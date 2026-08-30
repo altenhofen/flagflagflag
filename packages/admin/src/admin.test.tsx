@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { Login, Shell } from './main';
-import type { User } from './api';
+import { Login, Shell } from './main.js';
+import type { User } from './api.js';
 
 const user: User = { id: 'u1', username: 'flag3', name: 'Flag Three', email: 'flag3@example.test' };
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
