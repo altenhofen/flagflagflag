@@ -7,6 +7,7 @@ async function bootstrap() {
     instrument: ObserveInstrument,
   });
   app.setGlobalPrefix('api/v1');
+  app.enableCors({ origin: true, credentials: true });
   app.useGlobalFilters(new ProblemDetailsFilter());
   await app.listen(process.env.PORT ?? 3000);
 }
