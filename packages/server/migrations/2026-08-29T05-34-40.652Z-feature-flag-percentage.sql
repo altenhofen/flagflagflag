@@ -1,1 +1,0 @@
--- Percentage rollout is represented by the nullable rollout object on feature_flag.

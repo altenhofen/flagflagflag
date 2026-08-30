@@ -1,1 +1,0 @@
--- Targeting rules are created with the canonical feature_flag schema.
