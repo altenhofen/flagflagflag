@@ -49,6 +49,21 @@ const locationKeys: Record<keyof LocationState, string> = {
   auditAction: 'auditAction',
   expandedAuditId: 'auditEntry',
 };
+const actionLabels: Record<string, string> = {
+  'post.create': 'Created',
+  'patch.update': 'Updated',
+  'delete.delete': 'Deleted',
+  'delete.revoke': 'Revoked',
+};
+const resourceLabels: Record<string, string> = {
+  project: 'project',
+  environment: 'environment',
+  'feature-flag': 'feature flag',
+  'sdk-key': 'SDK key',
+};
+const validAuditResourceTypes = Object.keys(resourceLabels);
+const validAuditActions = Object.keys(actionLabels);
+function allowedQueryValue(value: string | null, allowed: readonly string[]) { return value && allowed.includes(value) ? value : undefined; }
 
 function readLocationState(): LocationState {
   if (typeof window === 'undefined') return {};
@@ -62,9 +77,9 @@ function readLocationState(): LocationState {
     flagKey: params.get(locationKeys.flagKey) ?? undefined,
     flagSection: flagSection === 'configuration' || flagSection === 'targeting' || flagSection === 'history' ? flagSection : undefined,
     search: params.get(locationKeys.search) ?? undefined,
-    auditEnvironmentId: params.get(locationKeys.auditEnvironmentId) ?? undefined,
-    auditResourceType: params.get(locationKeys.auditResourceType) ?? undefined,
-    auditAction: params.get(locationKeys.auditAction) ?? undefined,
+    auditEnvironmentId: params.get(locationKeys.auditEnvironmentId) || undefined,
+    auditResourceType: allowedQueryValue(params.get(locationKeys.auditResourceType), validAuditResourceTypes),
+    auditAction: allowedQueryValue(params.get(locationKeys.auditAction), validAuditActions),
     expandedAuditId: params.get(locationKeys.expandedAuditId) ?? undefined,
   };
 }
@@ -91,18 +106,6 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, {
   minute: '2-digit',
   timeZoneName: 'short',
 });
-const actionLabels: Record<string, string> = {
-  'post.create': 'Created',
-  'patch.update': 'Updated',
-  'delete.delete': 'Deleted',
-  'delete.revoke': 'Revoked',
-};
-const resourceLabels: Record<string, string> = {
-  project: 'project',
-  environment: 'environment',
-  'feature-flag': 'feature flag',
-  'sdk-key': 'SDK key',
-};
 
 function formatDate(value: string | Date) { return dateFormatter.format(new Date(value)); }
 function formatAction(action: string) { return actionLabels[action] ?? action.replace(/^[a-z]+\./, '').replace(/([A-Z])/g, ' $1'); }
@@ -140,7 +143,7 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
     }
   }
 
-  return <main className="login-page"><section className="login-card"><div className="mark" aria-hidden="true">F<span>³</span></div><p className="eyebrow">CONTROL PLANE / PRIVATE</p><h1>Welcome back.</h1><p className="muted">Ship safer changes by managing flags, environments, and release history from one calm place.</p><form onSubmit={submit}><label htmlFor="username">Username<input id="username" name="username" autoComplete="username" required value={username} onChange={e => setUsername(e.target.value)} /></label><label htmlFor="password">Password<input id="password" name="password" type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} /></label>{error && <Status error focus>{error}</Status>}<button type="submit" className="primary" disabled={busy} aria-busy={busy}>{busy ? <><Spinner />Signing in…</> : 'Sign in →'}</button></form></section></main>;
+  return <main id="login-content" className="login-page"><a className="skip-link" href="#login-form">Skip to main content</a><section className="login-card"><div className="mark" aria-hidden="true">F<span>³</span></div><p className="eyebrow">CONTROL PLANE / PRIVATE</p><h1>Welcome back.</h1><p className="muted">Ship safer changes by managing flags, environments, and release history from one calm place.</p><form id="login-form" onSubmit={submit}><label htmlFor="username">Username<input id="username" name="username" autoComplete="username" required value={username} onChange={e => setUsername(e.target.value)} /></label><label htmlFor="password">Password<input id="password" name="password" type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} /></label>{error && <Status error focus>{error}</Status>}<button type="submit" className="primary" disabled={busy} aria-busy={busy}>{busy ? <><Spinner />Signing in…</> : 'Sign in →'}</button></form></section></main>;
 }
 
 function ProjectList({ projects, onSelect }: { projects: Project[]; onSelect: (project: Project) => void }) {
@@ -246,7 +249,7 @@ export function Shell({ user, onLogout }: { user: User; onLogout: () => void }) 
   }
 
   function selectFlag(nameValue: string, key: string) {
-    setFlagCrumb(nameValue);
+    setFlagCrumb(key ? nameValue : '');
     updateLocation({ flagKey: key || null });
   }
 
@@ -276,13 +279,13 @@ export function Shell({ user, onLogout }: { user: User; onLogout: () => void }) 
         </aside>
         <button type="button" className={`mobile-scrim ${mobile ? 'visible' : ''}`} aria-label="Close navigation" onClick={() => setMobile(false)} />
         <button type="button" className="mobile-toggle" aria-label="Toggle navigation" aria-expanded={mobile} aria-controls="workspace-sidebar" onClick={() => setMobile(open => !open)}>{mobile ? '×' : '☰'}</button>
-        <main id="main-content" className="content" inert={mobile || undefined}>{selected ? <Workspace project={selected} tab={tab} onTabChange={changeTab} onFlagSelect={selectFlag} onUnsavedChange={reportUnsavedChanges} onChange={next => { setProjects(items => items.map(item => item.id === next.id ? next : item)); setSelected(next); }} onDelete={() => { setProjects(items => items.filter(item => item.id !== selected.id)); setSelected(null); openProjects(true); }} /> : <><section className="intro"><div><p className="eyebrow">SHIP WITH INTENT</p><h1>Make every release reversible.</h1><p className="muted">Projects are the boundary for environments, targeting rules, and audit history.</p></div><form className="create-form" onSubmit={create}><label className="sr-only" htmlFor="new-project">New project name</label><input id="new-project" name="projectName" autoComplete="off" placeholder="New project name…" value={name} onChange={e => setName(e.target.value)} /><button type="submit" className="primary" disabled={busy} aria-busy={busy}>{busy ? <><Spinner />Creating…</> : 'Create project'}</button></form></section><h2 className="page-title">Your projects</h2>{error && <Status error focus>{error}</Status>}{loading ? <LoadingState>Loading projects…</LoadingState> : <ProjectList projects={projects} onSelect={selectProject} />}</>}</main>
+        <main id="main-content" className="content" inert={mobile || undefined}>{error && <Status error focus>{error}</Status>}{selected ? <Workspace project={selected} tab={tab} onTabChange={changeTab} onFlagSelect={selectFlag} onUnsavedChange={reportUnsavedChanges} onChange={next => { setProjects(items => items.map(item => item.id === next.id ? next : item)); setSelected(next); }} onDelete={() => { setProjects(items => items.filter(item => item.id !== selected.id)); setSelected(null); openProjects(true); }} canLeave={canLeave} /> : <><section className="intro"><div><p className="eyebrow">SHIP WITH INTENT</p><h1>Make every release reversible.</h1><p className="muted">Projects are the boundary for environments, targeting rules, and audit history.</p></div><form className="create-form" onSubmit={create}><label className="sr-only" htmlFor="new-project">New project name</label><input id="new-project" name="projectName" autoComplete="off" placeholder="New project name…" value={name} onChange={e => setName(e.target.value)} /><button type="submit" className="primary" disabled={busy} aria-busy={busy}>{busy ? <><Spinner />Creating…</> : 'Create project'}</button></form></section><h2 className="page-title">Your projects</h2>{loading ? <LoadingState>Loading projects…</LoadingState> : <ProjectList projects={projects} onSelect={selectProject} />}</>}</main>
       </div>
     </div>
   );
 }
 
-function Workspace({ project, tab, onTabChange, onFlagSelect, onUnsavedChange, onChange, onDelete }: { project: Project; tab: Tab; onTabChange: (tab: Tab) => boolean; onFlagSelect: (name: string, key: string) => void; onUnsavedChange: (dirty: boolean) => void; onChange: (project: Project) => void; onDelete: () => void }) {
+function Workspace({ project, tab, onTabChange, onFlagSelect, onUnsavedChange, canLeave, onChange, onDelete }: { project: Project; tab: Tab; onTabChange: (tab: Tab) => boolean; onFlagSelect: (name: string, key: string) => void; onUnsavedChange: (dirty: boolean) => void; canLeave: () => boolean; onChange: (project: Project) => void; onDelete: () => void }) {
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [environment, setEnvironment] = useState<Environment | null>(null);
   const [loading, setLoading] = useState(true);
@@ -341,7 +344,7 @@ function Workspace({ project, tab, onTabChange, onFlagSelect, onUnsavedChange, o
     }
   }
 
-  return <section className="workspace">{tab !== 'environments' && environments.length > 0 && <div className="workspace-toolbar"><label className="env-picker" htmlFor="workspace-environment"><span>Current environment</span><select id="workspace-environment" name="currentEnvironment" value={environment?.id ?? ''} onChange={e => chooseEnvironment(environments.find(item => item.id === e.target.value) ?? null)}>{environments.map(item => <option key={item.id} value={item.id}>{item.name}{item.name.toLowerCase() === 'production' ? ' · production' : ''}</option>)}</select></label></div>}<div className="workspace-panel">{tab === 'environments' && <Environments project={project} environments={environments} selected={environment} onSelect={chooseEnvironment} loading={loading} error={error} reload={load} />}{tab === 'flags' && (environment ? <Flags project={project} environment={environment} onViewAudit={() => { if (onTabChange('audit')) updateLocation({ auditEnvironmentId: environment.id, auditResourceType: 'feature-flag' }); }} onFlagSelect={onFlagSelect} onDirtyChange={setUnsaved} /> : <ChooseEnvironment environments={environments} onChoose={chooseEnvironment} onCreate={() => { onTabChange('environments'); }} />)}{tab === 'sdk' && (environment ? <SdkKeys project={project} environment={environment} /> : <ChooseEnvironment environments={environments} onChoose={chooseEnvironment} onCreate={() => { onTabChange('environments'); }} />)}{tab === 'audit' && <Audit project={project} environments={environments} />}</div><details className="project-settings"><summary>Project settings</summary><form className="inline-form" onSubmit={rename}><label htmlFor="project-name">Project name<input id="project-name" name="projectName" autoComplete="off" value={name} onChange={e => setName(e.target.value)} /></label><button type="submit" className="secondary">Save name</button><button type="button" className="danger" onClick={() => void remove()}>Delete project</button></form>{settingsError && <Status error focus>{settingsError}</Status>}</details></section>;
+  return <section className="workspace"><>{tab === 'flags' && <h1 className="page-title">Feature flags</h1>}{tab === 'sdk' && !environment && <h1 className="page-title">SDK keys</h1>}</>{tab !== 'environments' && environments.length > 0 && <div className="workspace-toolbar"><label className="env-picker" htmlFor="workspace-environment"><span>Current environment</span><select id="workspace-environment" name="currentEnvironment" value={environment?.id ?? ''} onChange={e => chooseEnvironment(environments.find(item => item.id === e.target.value) ?? null)}>{environments.map(item => <option key={item.id} value={item.id}>{item.name}{item.name.toLowerCase() === 'production' ? ' · production' : ''}</option>)}</select></label></div>}<div className="workspace-panel">{tab === 'environments' && <Environments project={project} environments={environments} selected={environment} onSelect={chooseEnvironment} loading={loading} error={error} reload={load} />}{tab === 'flags' && (environment ? <Flags project={project} environment={environment} onViewAudit={() => { if (onTabChange('audit')) updateLocation({ auditEnvironmentId: environment.id, auditResourceType: 'feature-flag' }); }} onFlagSelect={onFlagSelect} onDirtyChange={setUnsaved} canLeave={canLeave} /> : <ChooseEnvironment environments={environments} onChoose={chooseEnvironment} onCreate={() => { onTabChange('environments'); }} />)}{tab === 'sdk' && (environment ? <SdkKeys project={project} environment={environment} /> : <ChooseEnvironment environments={environments} onChoose={chooseEnvironment} onCreate={() => { onTabChange('environments'); }} />)}{tab === 'audit' && <Audit project={project} environments={environments} />}</div><details className="project-settings"><summary>Project settings</summary><form className="inline-form" onSubmit={rename}><label htmlFor="project-name">Project name<input id="project-name" name="projectName" autoComplete="off" value={name} onChange={e => setName(e.target.value)} /></label><button type="submit" className="secondary">Save name</button><button type="button" className="danger" onClick={() => void remove()}>Delete project</button></form>{settingsError && <Status error focus>{settingsError}</Status>}</details></section>;
 }
 
 function ChooseEnvironment({ environments, onChoose, onCreate }: { environments: Environment[]; onChoose: (environment: Environment | null) => void; onCreate: () => void }) {
@@ -351,15 +354,16 @@ function ChooseEnvironment({ environments, onChoose, onCreate }: { environments:
 
 function Environments({ project, environments, selected, onSelect, loading, error, reload }: { project: Project; environments: Environment[]; selected: Environment | null; onSelect: (item: Environment | null) => void; loading: boolean; error: string; reload: () => Promise<void> }) {
   const [name, setName] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<'create' | 'save' | 'delete' | null>(null);
   const [formError, setFormError] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const busy = busyAction !== null;
 
   async function create(event: FormEvent) {
     event.preventDefault();
     if (!name.trim()) { setFormError('Environment name is required.'); return; }
-    setBusy(true);
+    setBusyAction('create');
     setFormError('');
     try {
       const item = await api.createEnvironment(project.id, name.trim());
@@ -369,13 +373,13 @@ function Environments({ project, environments, selected, onSelect, loading, erro
     } catch (reason) {
       setFormError(message(reason, 'Unable to create environment.'));
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
   async function save(item: Environment) {
     if (!editName.trim()) { setFormError('Environment name is required.'); return; }
-    setBusy(true);
+    setBusyAction('save');
     setFormError('');
     try {
       await api.updateEnvironment(project.id, item.id, editName.trim());
@@ -384,13 +388,13 @@ function Environments({ project, environments, selected, onSelect, loading, erro
     } catch (reason) {
       setFormError(message(reason, 'Unable to rename environment.'));
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
   async function remove(item: Environment) {
     if (!confirmDelete(`Delete ${item.name} and all its flags?`)) return;
-    setBusy(true);
+    setBusyAction('delete');
     setFormError('');
     try {
       await api.deleteEnvironment(project.id, item.id);
@@ -399,16 +403,16 @@ function Environments({ project, environments, selected, onSelect, loading, erro
     } catch (reason) {
       setFormError(message(reason, 'Unable to delete environment.'));
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
-  return <><div className="section-heading"><div><p className="eyebrow">RELEASE CHANNELS</p><h1>Environments</h1></div><span className="count-badge" aria-label={`${environments.length} environments`}>{environments.length}</span></div><form className="create-form wide" onSubmit={create}><label className="sr-only" htmlFor="environment-name">Environment name</label><input id="environment-name" name="environmentName" autoComplete="off" placeholder="e.g. production…" value={name} onChange={e => setName(e.target.value)} /><button type="submit" className="primary" disabled={busy} aria-busy={busy}>{busy ? <><Spinner />Creating…</> : 'Add environment'}</button></form>{formError && <Status error focus>{formError}</Status>}{loading ? <LoadingState>Loading environments…</LoadingState> : error ? <div className="empty"><Status error focus>{error}</Status><button type="button" className="secondary" onClick={() => void reload()}>Try again</button></div> : !environments.length ? <div className="empty"><h3>No environments</h3><p>Start with development, staging, or production.</p></div> : <div className="resource-list">{environments.map(item => <article className={`resource-card ${selected?.id === item.id ? 'selected' : ''}`} key={item.id}><button type="button" className="resource-main" onClick={() => onSelect(item)} disabled={busy} aria-current={selected?.id === item.id ? 'true' : undefined}><span className="env-dot" aria-hidden="true" /><span className="resource-copy"><strong>{item.name}</strong><small>{item.name.toLowerCase() === 'production' ? 'Production · review changes carefully' : 'Ready for configuration'}</small></span></button>{editing === item.id ? <form className="rename-form" onSubmit={e => { e.preventDefault(); void save(item); }}><label className="sr-only" htmlFor={`rename-${item.id}`}>New name</label><input id={`rename-${item.id}`} name="environmentName" autoComplete="off" value={editName} onChange={e => setEditName(e.target.value)} /><button type="submit" className="secondary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button><button type="button" className="ghost" onClick={() => setEditing(null)}>Cancel</button></form> : <div className="card-actions"><button type="button" className="ghost" disabled={busy} onClick={() => { setEditing(item.id); setEditName(item.name); }}>Rename</button><button type="button" className="ghost danger-text" disabled={busy} onClick={() => void remove(item)}>{busy ? 'Deleting…' : 'Delete'}</button></div>}</article>)}</div>}</>;
+  return <><div className="section-heading"><div><p className="eyebrow">RELEASE CHANNELS</p><h1>Environments</h1></div><span className="count-badge" aria-label={`${environments.length} environments`}>{environments.length}</span></div><form className="create-form wide" onSubmit={create}><label className="sr-only" htmlFor="environment-name">Environment name</label><input id="environment-name" name="environmentName" autoComplete="off" placeholder="e.g. production…" value={name} onChange={e => setName(e.target.value)} /><button type="submit" className="primary" disabled={busy} aria-busy={busy}>{busyAction === 'create' ? <><Spinner />Creating…</> : 'Add environment'}</button></form>{formError && <Status error focus>{formError}</Status>}{loading ? <LoadingState>Loading environments…</LoadingState> : error ? <div className="empty"><Status error focus>{error}</Status><button type="button" className="secondary" onClick={() => void reload()}>Try again</button></div> : !environments.length ? <div className="empty"><h3>No environments</h3><p>Start with development, staging, or production.</p></div> : <div className="resource-list">{environments.map(item => <article className={`resource-card ${selected?.id === item.id ? 'selected' : ''}`} key={item.id}><button type="button" className="resource-main" onClick={() => onSelect(item)} disabled={busy} aria-current={selected?.id === item.id ? 'true' : undefined}><span className="env-dot" aria-hidden="true" /><span className="resource-copy"><strong>{item.name}</strong><small>{item.name.toLowerCase() === 'production' ? 'Production · review changes carefully' : 'Ready for configuration'}</small></span></button>{editing === item.id ? <form className="rename-form" onSubmit={e => { e.preventDefault(); void save(item); }}><label className="sr-only" htmlFor={`rename-${item.id}`}>New name</label><input id={`rename-${item.id}`} name="environmentName" autoComplete="off" value={editName} onChange={e => setEditName(e.target.value)} /><button type="submit" className="secondary" disabled={busy}>{busyAction === 'save' ? 'Saving…' : 'Save'}</button><button type="button" className="ghost" onClick={() => setEditing(null)}>Cancel</button></form> : <div className="card-actions"><button type="button" className="ghost" disabled={busy} onClick={() => { setEditing(item.id); setEditName(item.name); }}>Rename</button><button type="button" className="ghost danger-text" disabled={busy} onClick={() => void remove(item)}>{busyAction === 'delete' ? 'Deleting…' : 'Delete'}</button></div>}</article>)}</div>}</>;
 }
 
 const emptyFlag = { key: '', name: '', enabled: true, defaultValue: false, rollout: null as Rollout | null, rules: [] as TargetingRule[] };
 
-function Flags({ project, environment, onViewAudit, onFlagSelect, onDirtyChange }: { project: Project; environment: Environment; onViewAudit: () => void; onFlagSelect: (name: string, key: string) => void; onDirtyChange: (dirty: boolean) => void }) {
+function Flags({ project, environment, onViewAudit, onFlagSelect, onDirtyChange, canLeave }: { project: Project; environment: Environment; onViewAudit: () => void; onFlagSelect: (name: string, key: string) => void; onDirtyChange: (dirty: boolean) => void; canLeave: () => boolean }) {
   const [flags, setFlags] = useState<FeatureFlag[]>([]);
   const [selected, setSelected] = useState<FeatureFlag | null>(null);
   const [environments, setEnvironments] = useState<Environment[]>([]);
@@ -418,11 +422,13 @@ function Flags({ project, environment, onViewAudit, onFlagSelect, onDirtyChange 
   const [error, setError] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState(emptyFlag);
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<'create' | 'update' | 'delete' | null>(null);
+  const busy = busyAction !== null;
   const [notice, setNotice] = useState('');
   const noticeRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => { if (notice && notice !== 'Saved.') noticeRef.current?.focus(); }, [notice]);
 
+  const loadedRef = useRef(false);
   function generateKey() {
     const base = form.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 90) || 'feature';
     setForm(current => ({ ...current, key: `${base}_${Math.random().toString(36).slice(2, 8)}` }));
@@ -438,16 +444,23 @@ function Flags({ project, environment, onViewAudit, onFlagSelect, onDirtyChange 
       const all = pages.flatMap(page => page.data);
       const requestedKey = readLocationState().flagKey;
       setFlags(all);
-      setSelected(current => all.find(item => item.key === current?.key && item.environmentId === environment.id) ?? all.find(item => item.key === requestedKey && item.environmentId === environment.id) ?? all.find(item => item.environmentId === environment.id) ?? null);
+      const next = all.find(item => item.key === selected?.key && item.environmentId === environment.id) ?? all.find(item => item.key === requestedKey && item.environmentId === environment.id) ?? all.find(item => item.environmentId === environment.id) ?? null;
+      loadedRef.current = true;
+      setSelected(next);
     } catch (reason) {
       setError(message(reason, 'Unable to load feature flags.'));
     } finally {
       setLoading(false);
     }
   }
+  function selectFlag(next: FeatureFlag) {
+    if (next.key === selected?.key && next.environmentId === selected?.environmentId) return;
+    if (!canLeave()) return;
+    setSelected(next);
+  }
 
   useEffect(() => { void load(); }, [project.id, environment.id]);
-  useEffect(() => { onFlagSelect(selected?.name ?? '', selected?.key ?? ''); }, [onFlagSelect, selected?.key, selected?.name]);
+  useEffect(() => { if (loadedRef.current) onFlagSelect(selected?.name ?? '', selected?.key ?? ''); }, [onFlagSelect, selected?.key, selected?.name]);
   useEffect(() => { updateLocation({ search: search || null }); }, [search]);
   useEffect(() => { if (!selected) { setChanges([]); return; } let live = true; const key = selected.key; api.auditLogs(project.id, { resourceType: 'feature-flag' }).then(page => { if (live) setChanges(page.data.filter(entry => entry.resourceId === key).slice(0, 6)); }).catch(() => { if (live) setChanges([]); }); return () => { live = false; }; }, [project.id, selected?.key, selected?.version]);
 
@@ -455,7 +468,7 @@ function Flags({ project, environment, onViewAudit, onFlagSelect, onDirtyChange 
     event.preventDefault();
     if (!/^[a-z0-9][a-z0-9._-]{0,99}$/.test(form.key)) { setNotice('Use a lowercase key starting with a letter or number.'); return; }
     if (!form.name.trim()) { setNotice('Flag name is required.'); return; }
-    setBusy(true);
+    setBusyAction('create');
     setNotice('');
     try {
       const flag = await api.createFlag(project.id, environment.id, { ...form, name: form.name.trim() });
@@ -467,13 +480,13 @@ function Flags({ project, environment, onViewAudit, onFlagSelect, onDirtyChange 
     } catch (reason) {
       setNotice(message(reason, 'Unable to create flag.'));
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
   async function remove(flag: FeatureFlag) {
     if (!confirmDelete(`Delete “${flag.name}” from ${environments.find(item => item.id === flag.environmentId)?.name ?? 'this environment'}?`)) return;
-    setBusy(true);
+    setBusyAction('delete');
     setNotice('');
     try {
       await api.deleteFlag(project.id, flag.environmentId, flag.key);
@@ -483,13 +496,13 @@ function Flags({ project, environment, onViewAudit, onFlagSelect, onDirtyChange 
     } catch (reason) {
       setNotice(message(reason, 'Unable to delete flag.'));
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
   async function update(flag: FeatureFlag, payload: Partial<Omit<FeatureFlag, 'key' | 'environmentId' | 'version'>>) {
     if (payload.rules?.some(rule => rule.conditions.some(condition => (condition.operator === 'in' || condition.operator === 'notIn') && ((Array.isArray(condition.value) && condition.value.length === 0) || (!Array.isArray(condition.value) && !String(condition.value).split(',').some(value => value.trim())))))) { setNotice('In and not-in conditions require at least one value.'); return; }
-    setBusy(true);
+    setBusyAction('update');
     setNotice('');
     try {
       const rules = payload.rules?.map((rule, priority) => ({ ...rule, priority, conditions: rule.conditions.map(condition => ({ ...condition, value: condition.operator === 'in' || condition.operator === 'notIn' ? (Array.isArray(condition.value) ? condition.value : String(condition.value).split(',').map(value => value.trim()).filter(Boolean)) : condition.operator.includes('Than') ? Number(condition.value) : condition.value })) }));
@@ -501,7 +514,7 @@ function Flags({ project, environment, onViewAudit, onFlagSelect, onDirtyChange 
       setNotice(message(reason, 'Update rejected. Refresh to resolve a version conflict.'));
       throw reason;
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
@@ -517,12 +530,12 @@ function Flags({ project, environment, onViewAudit, onFlagSelect, onDirtyChange 
   }, [filtered]);
   const noMatches = Boolean(search.trim()) && filtered.length === 0;
 
-  return <>{notice && <p ref={noticeRef} className={notice === 'Saved.' ? 'success' : 'error'} role={notice === 'Saved.' ? 'status' : 'alert'} aria-live="polite" tabIndex={notice === 'Saved.' ? undefined : -1}>{notice}</p>}{loading ? <LoadingState>Loading flags…</LoadingState> : error ? <div className="empty"><Status error focus>{error}</Status><button type="button" className="secondary" onClick={() => void load()}>Try again</button></div> : !flags.length ? <div className="empty"><h3>No flags in {environment.name}</h3><p>Put a reversible decision in front of a release.</p><button type="button" className="primary" onClick={() => setCreateOpen(true)}>＋ Create Flag</button></div> : <>{selected && <Editor flag={selected} environment={environment} changes={changes} busy={busy} onSave={update} onDelete={remove} onViewAudit={onViewAudit} onDirtyChange={onDirtyChange} />}<section className="all-flags"><div className="section-heading"><h2>All Flags</h2><div className="card-actions"><label className="sr-only" htmlFor="flag-search">Search flags</label><input id="flag-search" name="flagSearch" autoComplete="off" placeholder="Search flags…" value={search} onChange={e => setSearch(e.target.value)} /><button type="button" className="primary" onClick={() => setCreateOpen(open => !open)}>{createOpen ? 'Close form' : '＋ Create Flag'}</button></div></div>{createOpen && <form className="form-card" onSubmit={create} aria-busy={busy}><div className="form-grid"><label htmlFor="flag-key">Key<input id="flag-key" name="flagKey" autoComplete="off" required value={form.key} onChange={e => setForm({ ...form, key: e.target.value })} placeholder="checkout_redesign…" /><button type="button" className="ghost" onClick={generateKey}>Generate key</button></label><label htmlFor="flag-name">Name<input id="flag-name" name="flagName" autoComplete="off" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Checkout redesign…" /></label></div><Toggle label="Enabled for evaluations" checked={form.enabled} onChange={enabled => setForm({ ...form, enabled })} /><Toggle label="Default value" checked={form.defaultValue} onChange={defaultValue => setForm({ ...form, defaultValue })} /><button type="submit" className="primary" disabled={busy} aria-busy={busy}>{busy ? <><Spinner />Creating…</> : 'Create flag'}</button></form>}{noMatches ? <div className="empty"><h3>No flags match “{search}”</h3><p>Try a different flag name or key.</p><button type="button" className="secondary" onClick={() => setSearch('')}>Clear search</button></div> : <div className="table-wrap"><table><caption className="sr-only">All flags across environments</caption><thead><tr><th scope="col">Name</th><th scope="col">Key</th>{environments.map(item => <th scope="col" key={item.id}>{item.name}</th>)}</tr></thead><tbody>{rows.map(row => { const representative = row.variants.find(item => item.environmentId === environment.id) ?? row.variants[0]; return <tr key={row.key} className={selected?.key === row.key ? 'selected' : undefined}><td><button type="button" className="flag-link" onClick={() => setSelected(representative)}><strong>{row.name}</strong><code translate="no">{row.key}</code></button></td><td><code translate="no">{row.key}</code></td>{environments.map(item => { const variant = row.variants.find(flag => flag.environmentId === item.id); return <td key={item.id}>{variant ? <button type="button" className="env-status" aria-current={selected?.key === variant.key && selected.environmentId === variant.environmentId ? 'true' : undefined} aria-label={`${row.name} in ${item.name}: ${variant.enabled ? 'ON' : 'OFF'}`} onClick={() => setSelected(variant)}><span className={`dot ${variant.enabled ? 'on' : 'off'}`} aria-hidden="true" />{variant.enabled ? 'ON' : 'OFF'}{variant.rollout ? ` ⌄ ${variant.rollout.percentage}%` : ''}</button> : <span className="muted">—</span>}</td>; })}</tr>; })}</tbody></table></div>}</section></>}</>;
+  return <>{notice && <p ref={noticeRef} className={notice === 'Saved.' ? 'success' : 'error'} role={notice === 'Saved.' ? 'status' : 'alert'} aria-live="polite" tabIndex={notice === 'Saved.' ? undefined : -1}>{notice}</p>}{loading ? <LoadingState>Loading flags…</LoadingState> : error ? <div className="empty"><Status error focus>{error}</Status><button type="button" className="secondary" onClick={() => void load()}>Try again</button></div> : !flags.length && !search.trim() ? <div className="empty"><h3>No flags in {environment.name}</h3><p>Put a reversible decision in front of a release.</p><button type="button" className="primary" onClick={() => setCreateOpen(true)}>＋ Create Flag</button></div> : <>{selected && <Editor flag={selected} environment={environment} changes={changes} busy={busy} onSave={update} onDelete={remove} onViewAudit={onViewAudit} onDirtyChange={onDirtyChange} busyAction={busyAction} />}<section className="all-flags"><div className="section-heading"><h2>All Flags</h2><div className="card-actions"><label className="sr-only" htmlFor="flag-search">Search flags</label><input id="flag-search" name="flagSearch" autoComplete="off" placeholder="Search flags…" value={search} onChange={e => setSearch(e.target.value)} /><button type="button" className="primary" onClick={() => setCreateOpen(open => !open)}>{createOpen ? 'Close form' : '＋ Create Flag'}</button></div></div>{createOpen && <form className="form-card" onSubmit={create} aria-busy={busy}><div className="form-grid"><label htmlFor="flag-key">Key<input id="flag-key" name="flagKey" autoComplete="off" required value={form.key} onChange={e => setForm({ ...form, key: e.target.value })} placeholder="checkout_redesign…" /><button type="button" className="ghost" onClick={generateKey}>Generate key</button></label><label htmlFor="flag-name">Name<input id="flag-name" name="flagName" autoComplete="off" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Checkout redesign…" /></label></div><Toggle label="Enabled for evaluations" checked={form.enabled} onChange={enabled => setForm({ ...form, enabled })} /><Toggle label="Default value" checked={form.defaultValue} onChange={defaultValue => setForm({ ...form, defaultValue })} /><button type="submit" className="primary" disabled={busy} aria-busy={busy}>{busy ? <><Spinner />Creating…</> : 'Create flag'}</button></form>}{noMatches ? <div className="empty"><h3>No flags match “{search}”</h3><p>Try a different flag name or key.</p><button type="button" className="secondary" onClick={() => setSearch('')}>Clear search</button></div> : <div className="table-wrap"><table><caption className="sr-only">All flags across environments</caption><thead><tr><th scope="col">Name</th><th scope="col">Key</th>{environments.map(item => <th scope="col" key={item.id}>{item.name}</th>)}</tr></thead><tbody>{rows.map(row => { const representative = row.variants.find(item => item.environmentId === environment.id) ?? row.variants[0]; return <tr key={row.key} className={selected?.key === row.key ? 'selected' : undefined}><td><button type="button" className="flag-link" onClick={() => selectFlag(representative)}><strong>{row.name}</strong><code translate="no">{row.key}</code></button></td><td><code translate="no">{row.key}</code></td>{environments.map(item => { const variant = row.variants.find(flag => flag.environmentId === item.id); return <td key={item.id}>{variant ? <button type="button" className="env-status" aria-current={selected?.key === variant.key && selected.environmentId === variant.environmentId ? 'true' : undefined} aria-label={`${row.name} in ${item.name}: ${variant.enabled ? 'ON' : 'OFF'}`} onClick={() => selectFlag(variant)}><span className={`dot ${variant.enabled ? 'on' : 'off'}`} aria-hidden="true" />{variant.enabled ? 'ON' : 'OFF'}{variant.rollout ? ` ⌄ ${variant.rollout.percentage}%` : ''}</button> : <span className="muted">—</span>}</td>; })}</tr>; })}</tbody></table></div>}</section></>}</>;
 }
 
 function Toggle({ label, checked, onChange, srLabel = false }: { label: string; checked: boolean; onChange: (value: boolean) => void; srLabel?: boolean }) { return <label className="toggle"><input type="checkbox" name={label.toLowerCase().replace(/\s+/g, '-')} checked={checked} onChange={e => onChange(e.target.checked)} /><span className="toggle-track" aria-hidden="true" /><span className={srLabel ? 'sr-only' : 'toggle-label'}>{label}</span></label>; }
 
-function Editor({ flag, environment, changes, busy, onSave, onDelete, onViewAudit, onDirtyChange }: { flag: FeatureFlag; environment: Environment; changes: AuditEntry[]; busy: boolean; onSave: (flag: FeatureFlag, payload: Partial<Omit<FeatureFlag, 'key' | 'environmentId' | 'version'>>) => Promise<void>; onDelete: (flag: FeatureFlag) => Promise<void>; onViewAudit: () => void; onDirtyChange: (dirty: boolean) => void }) {
+function Editor({ flag, environment, changes, busy, busyAction, onSave, onDelete, onViewAudit, onDirtyChange }: { flag: FeatureFlag; environment: Environment; changes: AuditEntry[]; busy: boolean; busyAction: 'create' | 'update' | 'delete' | null; onSave: (flag: FeatureFlag, payload: Partial<Omit<FeatureFlag, 'key' | 'environmentId' | 'version'>>) => Promise<void>; onDelete: (flag: FeatureFlag) => Promise<void>; onViewAudit: () => void; onDirtyChange: (dirty: boolean) => void }) {
   const [name, setName] = useState(flag.name);
   const [enabled, setEnabled] = useState(flag.enabled);
   const [defaultValue, setDefault] = useState(flag.defaultValue);
@@ -546,9 +559,9 @@ function Editor({ flag, environment, changes, busy, onSave, onDelete, onViewAudi
   function addCondition(ruleIndex: number) { updateRule(ruleIndex, { ...draft[ruleIndex], conditions: [...draft[ruleIndex].conditions, { attribute: 'attribute', operator: 'equals', value: '' }] }); }
   function removeCondition(ruleIndex: number, conditionIndex: number) { const rule = draft[ruleIndex]; if (rule.conditions.length <= 1) return; updateRule(ruleIndex, { ...rule, conditions: rule.conditions.filter((_, i) => i !== conditionIndex) }); }
   async function saveRules() { await onSave(flag, { rules: draft }); setRules(draft); setEditing(false); }
-  function scrollTo(id: string, nextSection: FlagSection) { setSection(nextSection); updateLocation({ flagSection: nextSection }); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  function scrollTo(id: string, nextSection: FlagSection) { setSection(nextSection); updateLocation({ flagSection: nextSection }); document.getElementById(id)?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); }
 
-  return <article className="flag-editor"><div className="flag-head"><div className="flag-title"><h1 className="sr-only">{name || 'Untitled feature flag'}</h1><label className="sr-only" htmlFor="flag-display-name">Display name</label><input id="flag-display-name" name="flagName" autoComplete="off" className="title-input" value={name} onChange={e => setName(e.target.value)} /><span className={`pill ${flag.enabled ? 'good' : 'quiet'}`}>{flag.enabled ? 'Active' : 'Paused'}</span></div><button type="button" className="secondary" onClick={onViewAudit}><span aria-hidden="true">☷</span> View Audit Log</button></div><dl className="flag-meta"><div><dt>KEY</dt><dd><code translate="no">{flag.key}</code></dd></div><div><dt>ENVIRONMENT</dt><dd>{environment.name}</dd></div><div><dt>VERSION</dt><dd>{flag.version}</dd></div></dl><nav className="sub-nav" aria-label="Flag sections"><button type="button" className={section === 'configuration' ? 'active' : ''} aria-current={section === 'configuration' ? 'page' : undefined} onClick={() => scrollTo('flag-config', 'configuration')}>Configuration</button><button type="button" className={section === 'targeting' ? 'active' : ''} aria-current={section === 'targeting' ? 'page' : undefined} onClick={() => scrollTo('targeting-rules', 'targeting')}>Targeting Rules</button><button type="button" className={section === 'history' ? 'active' : ''} aria-current={section === 'history' ? 'page' : undefined} onClick={() => scrollTo('flag-history', 'history')}>History</button></nav><div className="detail-grid" id="flag-config"><div className="detail-main"><form className="config-form" onSubmit={save} aria-busy={busy}><div className="stat-cards"><div className="stat-card"><h4>Flag State</h4><div className="toggle-row"><Toggle label="Enabled" srLabel checked={enabled} onChange={setEnabled} /><strong className="state-text">{enabled ? 'ON' : 'OFF'}</strong></div><p className="muted">{enabled ? 'Flag is currently enabled' : 'Flag is currently disabled'}</p></div><div className="stat-card"><h4>Default Value</h4><div className="toggle-row"><Toggle label="Default on" srLabel checked={defaultValue} onChange={setDefault} /><strong className="state-text">{defaultValue ? 'ON' : 'OFF'}</strong></div><p className="muted">Used when no rules match</p></div><div className="stat-card"><h4>Rollout</h4><strong className="stat-value">{rolloutEnabled ? `${percentage}%` : 'Off'}</strong><div className={`progress ${rolloutEnabled ? '' : 'disabled'}`} aria-hidden="true"><span style={{ width: `${percentage}%` }} /></div><p className="muted">{rolloutEnabled ? `${percentage}% of users` : 'Rollout disabled'}</p></div><div className="stat-card"><h4>Config Version</h4><strong className="stat-value">{flag.version}</strong><p className="muted">Current version</p></div></div><section className="panel rollout-panel"><div className="rollout-row"><div><Toggle label="Enable rollout" checked={rolloutEnabled} onChange={enabledValue => setRollout(enabledValue ? { percentage, attribute: rollout?.attribute || 'userId' } : null)} /><p className="muted">Gradually roll out this flag to a percentage of your users.</p></div><div className="rollout-input"><label className="sr-only" htmlFor="rollout-percent">Percentage</label><input id="rollout-percent" name="rolloutPercentage" autoComplete="off" type="number" min="0" max="100" disabled={!rolloutEnabled} value={percentage} onChange={e => setRollout({ percentage: Number(e.target.value), attribute: rollout?.attribute || 'userId' })} /><span>%</span></div></div><input className="range" name="rolloutPercentageSlider" type="range" min="0" max="100" aria-label="Rollout percentage slider" disabled={!rolloutEnabled} value={percentage} onChange={e => setRollout({ percentage: Number(e.target.value), attribute: rollout?.attribute || 'userId' })} /><div className="range-marks"><span>0%</span><span>100%</span></div><div className="rollout-extra"><label htmlFor="rollout-attribute">Stable attribute<input id="rollout-attribute" name="rolloutAttribute" autoComplete="off" value={rollout?.attribute ?? ''} placeholder="userId…" disabled={!rolloutEnabled} onChange={e => setRollout(current => current ? { ...current, attribute: e.target.value } : current)} /></label><button type="button" className="ghost" disabled={!rolloutEnabled || busy} onClick={() => setRollout(null)}>Disable rollout</button></div><div className="form-actions"><button type="submit" className="primary" disabled={busy} aria-busy={busy}>{busy ? <><Spinner />Saving…</> : 'Save configuration'}</button></div></section></form><section className="panel rules" id="targeting-rules"><div className="panel-head"><div><h3>Targeting Rules</h3><p className="muted">Rules are evaluated top to bottom. The first matching rule wins.</p></div>{!editing ? <button type="button" className="secondary" onClick={() => setEditing(true)}>Edit targeting</button> : <button type="button" className="primary" onClick={addRule} disabled={draft.length >= 20}>{draft.length >= 20 ? 'Rule limit reached' : '＋ Add rule'}</button>}</div>{!editing ? rules.length ? rules.map((rule, index) => <RuleCard key={rule.id} rule={rule} index={index} />) : <p className="muted">No targeting rules. The flag uses its default value.</p> : <><div className="draft-note">Draft mode · changes stay local until saved. <button type="button" className="ghost" onClick={() => { setDraft(rules); setEditing(false); }}>Cancel</button></div>{draft.map((rule, index) => <div className="rule-card" key={rule.id}><div><strong>Rule {index + 1}</strong><button type="button" className="ghost" onClick={() => moveRule(index, -1)} disabled={index === 0}>↑</button><button type="button" className="ghost" onClick={() => moveRule(index, 1)} disabled={index === draft.length - 1}>↓</button><button type="button" className="ghost danger-text" onClick={() => setDraft(items => items.filter((_, i) => i !== index))}>Remove rule</button></div><div className="two-col"><label>Priority<input name={`rule-${index}-priority`} type="number" min="0" value={rule.priority} readOnly /></label><Toggle label="Return true" checked={rule.result} onChange={result => updateRule(index, { ...rule, result })} /></div>{rule.conditions.map((condition, conditionIndex) => <div className="condition" key={conditionIndex}><label>Attribute<input name={`rule-${index}-condition-${conditionIndex}-attribute`} value={condition.attribute} onChange={e => updateCondition(index, conditionIndex, { ...condition, attribute: e.target.value })} /></label><label>Operator<select name={`rule-${index}-condition-${conditionIndex}-operator`} value={condition.operator} onChange={e => updateCondition(index, conditionIndex, { ...condition, operator: e.target.value as TargetingOperator, value: e.target.value === 'in' || e.target.value === 'notIn' ? [] : e.target.value.includes('Than') ? 0 : '' })}>{operators.map(operator => <option key={operator} value={operator}>{operator.replace(/([A-Z])/g, ' $1')}</option>)}</select></label><label>Value<input name={`rule-${index}-condition-${conditionIndex}-value`} value={Array.isArray(condition.value) ? condition.value.join(', ') : String(condition.value)} onChange={e => updateCondition(index, conditionIndex, { ...condition, value: e.target.value })} /></label><button type="button" className="ghost danger-text" onClick={() => removeCondition(index, conditionIndex)} disabled={rule.conditions.length <= 1}>Remove condition</button></div>)}<button type="button" className="ghost" onClick={() => addCondition(index)}>＋ Add condition</button></div>)}<div className="form-actions"><button type="button" className="primary" onClick={() => void saveRules()} disabled={busy} aria-busy={busy}>{busy ? <><Spinner />Saving…</> : 'Save targeting'}</button></div></>}</section><button type="button" className="danger full-button" onClick={() => void onDelete(flag)} disabled={busy}>{busy ? 'Deleting…' : 'Delete flag'}</button></div><aside className="detail-side"><section className="panel env-info"><h3>Environment Info</h3><dl><div><dt>Name</dt><dd>{environment.name}</dd></div><div><dt>Identifier</dt><dd><code translate="no">{environment.id}</code></dd></div><div><dt>Config Version</dt><dd>{flag.version}</dd></div><div><dt>Last Updated</dt><dd>{changes[0] ? formatDate(changes[0].createdAt) : '—'}</dd></div></dl></section><section className="panel recent-changes" id="flag-history"><h3>Recent Changes</h3>{changes.length ? <ol className="timeline">{changes.map(entry => <li key={entry.id}><time dateTime={new Date(entry.createdAt).toISOString()}>{formatDate(entry.createdAt)}</time><p>{formatAction(entry.action)} {formatResourceType(entry.resourceType)}</p><span className="chip" translate="no">{entry.resourceId}</span><span className="actor">Actor {entry.actorId}</span></li>)}</ol> : <p className="muted">No recorded changes for this flag.</p>}<button type="button" className="secondary wide" onClick={onViewAudit}>View full audit log <span aria-hidden="true">→</span></button></section></aside></div></article>;
+  return <article className="flag-editor"><div className="flag-head"><div className="flag-title"><h2 className="sr-only">{name || 'Untitled feature flag'}</h2><label className="sr-only" htmlFor="flag-display-name">Display name</label><input id="flag-display-name" name="flagName" autoComplete="off" className="title-input" value={name} onChange={e => setName(e.target.value)} /><span className={`pill ${flag.enabled ? 'good' : 'quiet'}`}>{flag.enabled ? 'Active' : 'Paused'}</span></div><button type="button" className="secondary" onClick={onViewAudit}><span aria-hidden="true">☷</span> View Audit Log</button></div><dl className="flag-meta"><div><dt>KEY</dt><dd><code translate="no">{flag.key}</code></dd></div><div><dt>ENVIRONMENT</dt><dd>{environment.name}</dd></div><div><dt>VERSION</dt><dd>{flag.version}</dd></div></dl><nav className="sub-nav" aria-label="Flag sections"><button type="button" className={section === 'configuration' ? 'active' : ''} aria-current={section === 'configuration' ? 'page' : undefined} onClick={() => scrollTo('flag-config', 'configuration')}>Configuration</button><button type="button" className={section === 'targeting' ? 'active' : ''} aria-current={section === 'targeting' ? 'page' : undefined} onClick={() => scrollTo('targeting-rules', 'targeting')}>Targeting Rules</button><button type="button" className={section === 'history' ? 'active' : ''} aria-current={section === 'history' ? 'page' : undefined} onClick={() => scrollTo('flag-history', 'history')}>History</button></nav><div className="detail-grid" id="flag-config"><div className="detail-main"><form className="config-form" onSubmit={save} aria-busy={busy}><div className="stat-cards"><div className="stat-card"><h4>Flag State</h4><div className="toggle-row"><Toggle label="Enabled" srLabel checked={enabled} onChange={setEnabled} /><strong className="state-text">{enabled ? 'ON' : 'OFF'}</strong></div><p className="muted">{enabled ? 'Flag is currently enabled' : 'Flag is currently disabled'}</p></div><div className="stat-card"><h4>Default Value</h4><div className="toggle-row"><Toggle label="Default on" srLabel checked={defaultValue} onChange={setDefault} /><strong className="state-text">{defaultValue ? 'ON' : 'OFF'}</strong></div><p className="muted">Used when no rules match</p></div><div className="stat-card"><h4>Rollout</h4><strong className="stat-value">{rolloutEnabled ? `${percentage}%` : 'Off'}</strong><div className={`progress ${rolloutEnabled ? '' : 'disabled'}`} aria-hidden="true"><span style={{ width: `${percentage}%` }} /></div><p className="muted">{rolloutEnabled ? `${percentage}% of users` : 'Rollout disabled'}</p></div><div className="stat-card"><h4>Config Version</h4><strong className="stat-value">{flag.version}</strong><p className="muted">Current version</p></div></div><section className="panel rollout-panel"><div className="rollout-row"><div><Toggle label="Enable rollout" checked={rolloutEnabled} onChange={enabledValue => setRollout(enabledValue ? { percentage, attribute: rollout?.attribute || 'userId' } : null)} /><p className="muted">Gradually roll out this flag to a percentage of your users.</p></div><div className="rollout-input"><label className="sr-only" htmlFor="rollout-percent">Percentage</label><input id="rollout-percent" name="rolloutPercentage" autoComplete="off" type="number" min="0" max="100" disabled={!rolloutEnabled} value={percentage} onChange={e => setRollout({ percentage: Number(e.target.value), attribute: rollout?.attribute || 'userId' })} /><span>%</span></div></div><input className="range" name="rolloutPercentageSlider" type="range" min="0" max="100" aria-label="Rollout percentage slider" disabled={!rolloutEnabled} value={percentage} onChange={e => setRollout({ percentage: Number(e.target.value), attribute: rollout?.attribute || 'userId' })} /><div className="range-marks"><span>0%</span><span>100%</span></div><div className="rollout-extra"><label htmlFor="rollout-attribute">Stable attribute<input id="rollout-attribute" name="rolloutAttribute" autoComplete="off" value={rollout?.attribute ?? ''} placeholder="userId…" disabled={!rolloutEnabled} onChange={e => setRollout(current => current ? { ...current, attribute: e.target.value } : current)} /></label><button type="button" className="ghost" disabled={!rolloutEnabled || busy} onClick={() => setRollout(null)}>Disable rollout</button></div><div className="form-actions"><button type="submit" className="primary" disabled={busy} aria-busy={busy}>{busyAction === 'update' ? <><Spinner />Saving…</> : 'Save configuration'}</button></div></section></form><section className="panel rules" id="targeting-rules"><div className="panel-head"><div><h3>Targeting Rules</h3><p className="muted">Rules are evaluated top to bottom. The first matching rule wins.</p></div>{!editing ? <button type="button" className="secondary" onClick={() => setEditing(true)}>Edit targeting</button> : <button type="button" className="primary" onClick={addRule} disabled={draft.length >= 20}>{draft.length >= 20 ? 'Rule limit reached' : '＋ Add rule'}</button>}</div>{!editing ? rules.length ? rules.map((rule, index) => <RuleCard key={rule.id} rule={rule} index={index} />) : <p className="muted">No targeting rules. The flag uses its default value.</p> : <><div className="draft-note">Draft mode · changes stay local until saved. <button type="button" className="ghost" onClick={() => { setDraft(rules); setEditing(false); }}>Cancel</button></div>{draft.map((rule, index) => <div className="rule-card" key={rule.id}><div><strong>Rule {index + 1}</strong><button type="button" className="ghost" onClick={() => moveRule(index, -1)} disabled={index === 0}>↑</button><button type="button" className="ghost" onClick={() => moveRule(index, 1)} disabled={index === draft.length - 1}>↓</button><button type="button" className="ghost danger-text" onClick={() => setDraft(items => items.filter((_, i) => i !== index))}>Remove rule</button></div><div className="two-col"><label>Priority<input name={`rule-${index}-priority`} type="number" min="0" value={rule.priority} readOnly /></label><Toggle label="Return true" checked={rule.result} onChange={result => updateRule(index, { ...rule, result })} /></div>{rule.conditions.map((condition, conditionIndex) => <div className="condition" key={conditionIndex}><label>Attribute<input name={`rule-${index}-condition-${conditionIndex}-attribute`} value={condition.attribute} onChange={e => updateCondition(index, conditionIndex, { ...condition, attribute: e.target.value })} /></label><label>Operator<select name={`rule-${index}-condition-${conditionIndex}-operator`} value={condition.operator} onChange={e => updateCondition(index, conditionIndex, { ...condition, operator: e.target.value as TargetingOperator, value: e.target.value === 'in' || e.target.value === 'notIn' ? [] : e.target.value.includes('Than') ? 0 : '' })}>{operators.map(operator => <option key={operator} value={operator}>{operator.replace(/([A-Z])/g, ' $1')}</option>)}</select></label><label>Value<input name={`rule-${index}-condition-${conditionIndex}-value`} value={Array.isArray(condition.value) ? condition.value.join(', ') : String(condition.value)} onChange={e => updateCondition(index, conditionIndex, { ...condition, value: e.target.value })} /></label><button type="button" className="ghost danger-text" onClick={() => removeCondition(index, conditionIndex)} disabled={rule.conditions.length <= 1}>Remove condition</button></div>)}<button type="button" className="ghost" onClick={() => addCondition(index)}>＋ Add condition</button></div>)}<div className="form-actions"><button type="button" className="primary" onClick={() => void saveRules()} disabled={busy} aria-busy={busy}>{busyAction === 'update' ? <><Spinner />Saving…</> : 'Save targeting'}</button></div></>}</section><button type="button" className="danger full-button" onClick={() => void onDelete(flag)} disabled={busy}>{busyAction === 'delete' ? 'Deleting…' : 'Delete flag'}</button></div><aside className="detail-side"><section className="panel env-info"><h3>Environment Info</h3><dl><div><dt>Name</dt><dd>{environment.name}</dd></div><div><dt>Identifier</dt><dd><code translate="no">{environment.id}</code></dd></div><div><dt>Config Version</dt><dd>{flag.version}</dd></div><div><dt>Last Updated</dt><dd>{changes[0] ? formatDate(changes[0].createdAt) : '—'}</dd></div></dl></section><section className="panel recent-changes" id="flag-history"><h3>Recent Changes</h3>{changes.length ? <ol className="timeline">{changes.map(entry => <li key={entry.id}><time dateTime={new Date(entry.createdAt).toISOString()}>{formatDate(entry.createdAt)}</time><p>{formatAction(entry.action)} {formatResourceType(entry.resourceType)}</p><span className="chip" translate="no">{entry.resourceId}</span><span className="actor">Actor {entry.actorId}</span></li>)}</ol> : <p className="muted">No recorded changes for this flag.</p>}<button type="button" className="secondary wide" onClick={onViewAudit}>View full audit log <span aria-hidden="true">→</span></button></section></aside></div></article>;
 }
 
 function RuleCard({ rule, index }: { rule: TargetingRule; index: number }) { return <div className="rule-card readonly"><span className="drag-handle" aria-hidden="true">⠿</span><span className="rule-index">{index + 1}</span><span className="rule-return">Return: <span className={`pill ${rule.result ? 'good' : 'bad'}`}>{rule.result ? 'ON' : 'OFF'}</span></span><div className="rule-conditions">{rule.conditions.map((condition, conditionIndex) => <p key={conditionIndex}><span className="cond-kw">{conditionIndex === 0 ? 'IF' : 'AND'}</span><code className="chip" translate="no">{condition.attribute}</code><code className="chip" translate="no">{condition.operator.replace(/([A-Z])/g, ' $1')}</code><code className="chip" translate="no">{Array.isArray(condition.value) ? condition.value.join(', ') : String(condition.value)}</code></p>)}</div></div>; }
@@ -560,6 +573,7 @@ function SdkKeys({ project, environment }: { project: Project; environment: Envi
   const [secret, setSecret] = useState('');
   const [copyStatus, setCopyStatus] = useState('');
   const [busyAction, setBusyAction] = useState<'issue' | string | null>(null);
+  const secretRef = useRef<HTMLDivElement>(null);
 
   async function load() {
     setLoading(true);
@@ -573,6 +587,7 @@ function SdkKeys({ project, environment }: { project: Project; environment: Envi
   }
 
   useEffect(() => { void load(); }, [project.id, environment.id]);
+  useEffect(() => { if (secret) secretRef.current?.focus(); }, [secret]);
 
   async function create() {
     setBusyAction('issue');
@@ -613,7 +628,7 @@ function SdkKeys({ project, environment }: { project: Project; environment: Envi
   }
 
   const busy = busyAction !== null;
-  return <><div className="section-heading"><div><p className="eyebrow">CLIENT ACCESS</p><h1>SDK keys</h1></div><button type="button" className="primary" onClick={() => void create()} disabled={busy} aria-busy={busyAction === 'issue'}>{busyAction === 'issue' ? <><Spinner />Issuing…</> : 'Issue key'}</button></div><div className="security-note"><strong>Secrets are shown once.</strong><span>Store this key in a secret manager before dismissing it.</span></div>{secret && <div className="secret-reveal" role="region" aria-labelledby="new-sdk-secret"><strong id="new-sdk-secret">New SDK secret</strong><code translate="no">{secret}</code><div><button type="button" className="secondary" onClick={() => void copySecret()}>Copy secret</button><button type="button" className="ghost" onClick={() => { setSecret(''); setCopyStatus(''); }}>I stored it</button></div>{copyStatus && <Status>{copyStatus}</Status>}</div>}{error && <Status error focus>{error}</Status>}{loading ? <LoadingState>Loading keys…</LoadingState> : !keys.length ? <div className="empty"><h3>No SDK keys</h3><p>Issue a key when an application is ready.</p></div> : <div className="table-wrap"><table><caption className="sr-only">SDK keys</caption><thead><tr><th scope="col">Key</th><th scope="col">Created</th><th scope="col">Status</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead><tbody>{keys.map(key => <tr key={key.id}><td><code translate="no">{key.prefix}…</code></td><td>{formatDate(key.createdAt)}</td><td>{key.revokedAt ? 'Revoked' : 'Active'}</td><td>{!key.revokedAt && <button type="button" className="ghost danger-text" disabled={busy} onClick={() => void revoke(key)}>{busyAction === key.id ? 'Revoking…' : 'Revoke'}</button>}</td></tr>)}</tbody></table></div>}</>;
+  return <><div className="section-heading"><div><p className="eyebrow">CLIENT ACCESS</p><h1>SDK keys</h1></div><button type="button" className="primary" onClick={() => void create()} disabled={busy} aria-busy={busyAction === 'issue'}>{busyAction === 'issue' ? <><Spinner />Issuing…</> : 'Issue key'}</button></div><div className="security-note"><strong>Secrets are shown once.</strong><span>Store this key in a secret manager before dismissing it.</span></div>{secret && <div ref={secretRef} className="secret-reveal" role="region" aria-live="polite" aria-atomic="true" aria-labelledby="new-sdk-secret" tabIndex={-1}><strong id="new-sdk-secret">New SDK secret</strong><code translate="no">{secret}</code><div><button type="button" className="secondary" onClick={() => void copySecret()}>Copy secret</button><button type="button" className="ghost" onClick={() => { setSecret(''); setCopyStatus(''); }}>I stored it</button></div>{copyStatus && <Status>{copyStatus}</Status>}</div>}{error && <Status error focus>{error}</Status>}{loading ? <LoadingState>Loading keys…</LoadingState> : !keys.length ? <div className="empty"><h3>No SDK keys</h3><p>Issue a key when an application is ready.</p></div> : <div className="table-wrap"><table><caption className="sr-only">SDK keys</caption><thead><tr><th scope="col">Key</th><th scope="col">Created</th><th scope="col">Status</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead><tbody>{keys.map(key => <tr key={key.id}><td><code translate="no">{key.prefix}…</code></td><td>{formatDate(key.createdAt)}</td><td>{key.revokedAt ? 'Revoked' : 'Active'}</td><td>{!key.revokedAt && <button type="button" className="ghost danger-text" disabled={busy} onClick={() => void revoke(key)}>{busyAction === key.id ? 'Revoking…' : 'Revoke'}</button>}</td></tr>)}</tbody></table></div>}</>;
 }
 
 function Audit({ project, environments }: { project: Project; environments: Environment[] }) {
@@ -622,7 +637,7 @@ function Audit({ project, environments }: { project: Project; environments: Envi
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
-  const [environmentId, setEnvironmentId] = useState(location.auditEnvironmentId ?? '');
+  const [environmentId, setEnvironmentId] = useState(environments.some(item => item.id === location.auditEnvironmentId) ? location.auditEnvironmentId ?? '' : '');
   const [resourceType, setResourceType] = useState(location.auditResourceType ?? '');
   const [action, setAction] = useState(location.auditAction ?? '');
   const [retention, setRetention] = useState(90);

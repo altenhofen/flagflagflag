@@ -37,10 +37,13 @@ describe('admin control plane', () => {
   });
 
   it('lists projects, creates one, and preserves the session when logout fails', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [{ id: 'p1', name: 'Core API' }] }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'p2', name: 'Web app' }), { status: 200 }))
-      .mockRejectedValueOnce(new Error('network unavailable'));
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/auth/logout')) return Promise.reject(new Error('network unavailable'));
+      if (url.endsWith('/environments')) return Promise.resolve(jsonResponse({ data: [] }));
+      if (init?.method === 'POST') return Promise.resolve(jsonResponse({ id: 'p2', name: 'Web app' }));
+      return Promise.resolve(jsonResponse({ data: [{ id: 'p1', name: 'Core API' }] }));
+    });
     vi.stubGlobal('fetch', fetchMock);
     render(<Shell user={user} onLogout={vi.fn()} />);
     expect(await screen.findByText('Core API')).toBeInTheDocument();
@@ -78,6 +81,10 @@ describe('admin control plane', () => {
     const malformed = { key: 'checkout', name: 'Checkout', environmentId: 'e1', enabled: true, defaultValue: false, rollout: null, rules: [{ id: 'r1', priority: 0, result: true, conditions: [{ attribute: 'plan', operator: 'in', value: [] }] }], version: 1 };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: [malformed] }), { status: 200 })));
     await expect(api.flags('p1', 'e1')).rejects.toMatchObject({ status: 502 });
+  });
+  it('rejects malformed audit pagination metadata', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ data: [], pagination: { nextCursor: 42 } })));
+    await expect(api.auditLogs('p1')).rejects.toMatchObject({ status: 502 });
   });
   it('exports audit logs with active filters as CSV', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('id,action\n1,post.create\n', { status: 200, headers: { 'content-type': 'text/csv' } })));
@@ -171,13 +178,30 @@ describe('admin control plane', () => {
     await waitFor(() => expect(screen.getByText('Saved.')).toBeInTheDocument());
     expect(patches()[1][1]).toEqual(expect.objectContaining({ method: 'PATCH', body: expect.stringContaining('"priority":1') }));
   });
-  it('protects dirty flag edits when leaving the editor', async () => {
+  it('restores a flag selected by the shared URL', async () => {
     const environment = { id: 'e1', name: 'development', projectId: 'p1' };
     const flag = { key: 'checkout', name: 'Checkout', environmentId: 'e1', enabled: true, defaultValue: false, rollout: null, rules: [], version: 1 };
+    window.history.replaceState({}, '', '/?project=p1&tab=flags&environment=e1&flag=checkout');
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('/audit-logs')) return Promise.resolve(jsonResponse({ data: [] }));
       if (url.endsWith('/flags')) return Promise.resolve(jsonResponse({ data: [flag] }));
+      if (url.endsWith('/environments')) return Promise.resolve(jsonResponse({ data: [environment] }));
+      return Promise.resolve(jsonResponse({ data: [{ id: 'p1', name: 'Core API' }] }));
+    }));
+    render(<Shell user={user} onLogout={vi.fn()} />);
+
+    expect(await screen.findByLabelText('Display name')).toHaveValue('Checkout');
+    expect(window.location.search).toContain('flag=checkout');
+  });
+  it('protects dirty flag edits when leaving the editor', async () => {
+    const environment = { id: 'e1', name: 'development', projectId: 'p1' };
+    const flag = { key: 'checkout', name: 'Checkout', environmentId: 'e1', enabled: true, defaultValue: false, rollout: null, rules: [], version: 1 };
+    const otherFlag = { ...flag, key: 'search', name: 'Search' };
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/audit-logs')) return Promise.resolve(jsonResponse({ data: [] }));
+      if (url.endsWith('/flags')) return Promise.resolve(jsonResponse({ data: [flag, otherFlag] }));
       if (url.endsWith('/environments')) return Promise.resolve(jsonResponse({ data: [environment] }));
       return Promise.resolve(jsonResponse({ data: [{ id: 'p1', name: 'Core API' }] }));
     }));
@@ -190,6 +214,8 @@ describe('admin control plane', () => {
     expect(await screen.findByText('development')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Feature flags' }));
     fireEvent.change(await screen.findByLabelText('Display name'), { target: { value: 'Unsaved checkout' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search search' }));
+    expect(screen.getByLabelText('Display name')).toHaveValue('Unsaved checkout');
     fireEvent.click(screen.getByRole('button', { name: 'Environments' }));
 
     expect(confirmMock).toHaveBeenCalledWith('You have unsaved changes. Leave without saving?');
