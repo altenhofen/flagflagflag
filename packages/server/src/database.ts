@@ -10,6 +10,7 @@ import { SdkKeyEntity } from './sdk/sdk-key.entity.js';
 import { SdkConfigVersionEntity } from './sdk/sdk-config-version.entity.js';
 import { AuditEntryEntity } from './audit/audit.entity.js';
 import { AuditRetentionEntity } from './audit/audit-retention.entity.js';
+import { AuditMigration20260829090000 } from './migrations/audit.migration.js';
 
 const isPostgres = process.env.DATABASE_URL?.startsWith('postgres') ?? false;
 const sqliteDatabase = process.env.SQLITE_DATABASE ?? './flagflagflag.sqlite';
@@ -33,6 +34,7 @@ export const featureFlagDataSource = isPostgres
         AuditEntryEntity,
         AuditRetentionEntity,
       ],
+      migrations: [AuditMigration20260829090000],
       synchronize: false,
     })
   : new DataSource({
@@ -48,6 +50,7 @@ export const featureFlagDataSource = isPostgres
         AuditEntryEntity,
         AuditRetentionEntity,
       ],
+      migrations: [AuditMigration20260829090000],
       synchronize: false,
     });
 
@@ -74,10 +77,18 @@ const migrationUrls = [
   ),
   percentageMigrationUrl,
   targetingRulesMigrationUrl,
-  new URL('../migrations/2026-08-29T08-00-00.000Z-sdk-keys.sql', import.meta.url),
-  new URL('../migrations/2026-08-29T08-30-00.000Z-environment-config-version.sql', import.meta.url),
-  new URL('../migrations/2026-08-29T08-00-00.000Z-sdk-config-version.sql', import.meta.url),
-  new URL('../migrations/2026-08-29T09-00-00.000Z-audit.sql', import.meta.url),
+  new URL(
+    '../migrations/2026-08-29T08-00-00.000Z-sdk-keys.sql',
+    import.meta.url,
+  ),
+  new URL(
+    '../migrations/2026-08-29T08-30-00.000Z-environment-config-version.sql',
+    import.meta.url,
+  ),
+  new URL(
+    '../migrations/2026-08-29T08-00-00.000Z-sdk-config-version.sql',
+    import.meta.url,
+  ),
 ];
 
 let initializationPromise: Promise<void> | undefined;
@@ -111,6 +122,7 @@ async function runDatabaseInitialization(): Promise<void> {
   if (!featureFlagDataSource.isInitialized) {
     await featureFlagDataSource.initialize();
   }
+  await featureFlagDataSource.runMigrations();
 }
 
 async function applyMigration(

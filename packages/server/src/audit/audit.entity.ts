@@ -8,7 +8,7 @@ export class AuditEntryEntity {
   @Column({ type: 'text' })
   projectId!: string;
 
-  @CreateDateColumn({ type: 'datetime' })
+  @CreateDateColumn()
   createdAt!: Date;
 
   @Column({ type: 'text' })

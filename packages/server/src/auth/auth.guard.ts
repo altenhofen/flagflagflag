@@ -11,7 +11,7 @@ import { SESSION_COOKIE } from './tokens.js';
 import type { JwtPayload } from './auth-identity.service.js';
 import { AuthIdentityService } from './auth-identity.service.js';
 
-interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest extends Request {
   user?: JwtPayload;
 }
 

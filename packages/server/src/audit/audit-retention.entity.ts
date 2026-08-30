@@ -8,6 +8,6 @@ export class AuditRetentionEntity {
   @Column({ type: 'integer' })
   retentionDays!: number;
 
-  @UpdateDateColumn({ type: 'datetime' })
+  @UpdateDateColumn()
   updatedAt!: Date;
 }

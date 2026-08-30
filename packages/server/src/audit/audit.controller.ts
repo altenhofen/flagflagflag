@@ -1,10 +1,20 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
-import type { Request } from 'express';
 import { z } from 'zod';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Query,
+  Req,
+} from '@nestjs/common';
+import type { AuthenticatedRequest } from '../auth/auth.guard.js';
+import type { AuditEntryEntity } from './audit.entity.js';
 import { AuditService } from './audit.service.js';
-
-const RetentionSchema = z.object({ retentionDays: z.number().int().min(1).max(3650) }).strict();
-interface AuthRequest extends Request { user?: { sub: string } }
+const RetentionSchema = z
+  .object({ retentionDays: z.number().int().min(1).max(3650) })
+  .strict();
 
 @Controller('projects/:projectId')
 export class AuditController {
@@ -18,30 +28,42 @@ export class AuditController {
     @Query('action') action?: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
-  ) {
+  ): Promise<{
+    data: AuditEntryEntity[];
+    pagination: { nextCursor: string | null };
+  }> {
     const parsedLimit = limit === undefined ? undefined : Number(limit);
-    if (parsedLimit !== undefined && (!Number.isInteger(parsedLimit) || parsedLimit < 1)) {
+    if (
+      parsedLimit !== undefined &&
+      (!Number.isInteger(parsedLimit) || parsedLimit < 1)
+    ) {
       throw new BadRequestException('limit must be a positive integer');
     }
-    const result = await this.audit.list({ projectId, environmentId, resourceType, action, limit: parsedLimit, cursor });
+    const result = await this.audit.list({
+      projectId,
+      environmentId,
+      resourceType,
+      action,
+      limit: parsedLimit,
+      cursor,
+    });
     return { data: result.data, pagination: { nextCursor: result.nextCursor } };
   }
 
   @Get('audit-retention')
-  getRetention() {
+  getRetention(): Promise<{ retentionDays: number }> {
     return this.audit.getRetention();
   }
 
   @Patch('audit-retention')
-  setRetention(@Body() body: unknown, @Req() request: AuthRequest) {
-    if (!request.user?.sub) throw new BadRequestException('Authenticated actor required');
+  async setRetention(
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<{ retentionDays: number }> {
+    if (!request.user?.sub)
+      throw new BadRequestException('Authenticated actor required');
     const parsed = RetentionSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException(parsed.error.issues);
     return this.audit.setRetention(parsed.data.retentionDays);
-  }
-
-  @Post('audit-retention/cleanup')
-  cleanup() {
-    return this.audit.cleanup();
   }
 }
